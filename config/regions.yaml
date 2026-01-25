@@ -1,0 +1,39 @@
+US:
+  home_price: 428275
+  property_tax_pct: 0.009
+  hoa_monthly: 120
+  homeowners_insurance_annual: 2424
+  monthly_rent: 1615
+  renters_insurance_annual: 170
+  home_appreciation_rate_baseline: 0.035
+  rent_growth_rate_baseline: 0.03
+
+NC:
+  home_price: 383400
+  property_tax_pct: 0.0073
+  hoa_monthly: 110
+  homeowners_insurance_annual: 2951
+  monthly_rent: 1336
+  renters_insurance_annual: 150
+  home_appreciation_rate_baseline: 0.04
+  rent_growth_rate_baseline: 0.035
+
+CA:
+  home_price: 793200
+  property_tax_pct: 0.0071
+  hoa_monthly: 200
+  homeowners_insurance_annual: 1641
+  monthly_rent: 2202
+  renters_insurance_annual: 180
+  home_appreciation_rate_baseline: 0.0375
+  rent_growth_rate_baseline: 0.0325
+
+NY:
+  home_price: 560200
+  property_tax_pct: 0.017
+  hoa_monthly: 120
+  homeowners_insurance_annual: 1860
+  monthly_rent: 2994
+  renters_insurance_annual: 200
+  home_appreciation_rate_baseline: 0.035
+  rent_growth_rate_baseline: 0.031
