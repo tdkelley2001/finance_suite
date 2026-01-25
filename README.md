@@ -86,6 +86,26 @@ The modeling engine itself contains **no hard-coded UI logic**.
 
 ---
 
+### Model Regime Controls
+
+Certain assumptions are treated as **structural model choices**, not numeric overrides:
+
+- Rent basis
+- Filing status (single vs married)
+- Whether the home is sold at the end of the horizon
+
+These controls:
+- are set explicitly in the UI or CLI
+- are not stored in scenario or region YAMLs
+- override any baseline defaults
+- are always visible in the Active Assumptions summary
+
+This distinction ensures clarity between:
+- *how the model works* and
+- *what values it uses*.
+
+---
+
 ## Key Concepts
 
 ### Scenarios
@@ -108,6 +128,24 @@ Regions apply geographic tilts such as:
 - insurance costs
 
 Regions are defined in `regions.yaml`.
+
+---
+
+### Rent Basis
+
+The model supports multiple definitions of renter housing costs in the first year:
+
+| Rent Basis | Description |
+|----------|------------|
+| `market` | Uses the region’s baseline market rent |
+| `match_mortgage` | Sets year-1 rent equal to the owner’s annual mortgage payment |
+| `match_owner_cost` | Sets year-1 rent equal to the owner’s full housing cost (mortgage + taxes + maintenance + insurance + HOA) |
+
+**Important:**  
+Matching applies **only in year 1**.  
+After year 1, rent evolves independently based on rent growth assumptions.
+
+This design isolates the effect of *initial affordability* while allowing realistic long-run divergence.
 
 ---
 

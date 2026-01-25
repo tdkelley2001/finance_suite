@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Literal
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -77,6 +77,9 @@ def run_mc_cached(
     region: str,
     overrides: Optional[Dict],
     horizon: int,
+    rent_basis: str,
+    married: bool,
+    sell_at_end: bool,
     n_sims: int,
     seed: int,
     mc_profile: str,
@@ -88,6 +91,9 @@ def run_mc_cached(
         region=region,
         overrides=overrides,
         horizon=horizon,
+        rent_basis=rent_basis,
+        married=married,
+        sell_at_end=sell_at_end,
         n_sims=n_sims,
         seed=seed,
         mc_profile=mc_profile,
@@ -122,9 +128,6 @@ PARAM_GROUPS = {
         ("property_tax_pct", "Property tax (%)", "percent"),
         ("hoa_monthly", "HOA (monthly $)", "currency"),
         ("homeowners_insurance_annual", "Homeowners insurance (annual $)", "currency"),
-    ],
-    "Selling Costs": [
-        ("sell_at_end", "Sell at end of horizon", "bool"),
         ("selling_costs_pct", "Selling costs (%)", "percent"),
     ],
     "Rent Assumptions": [
@@ -134,13 +137,20 @@ PARAM_GROUPS = {
     ],
     "Investment & Taxes": [
         ("home_appreciation_rate", "Home appreciation rate (%)", "percent"),
-        ("married", "Married filing jointly", "bool"),
         ("capital_gains_tax_rate", "Capital gains tax rate (%)", "percent"),
         ("capital_gains_exclusion_single", "Single capital gains exclusion ($)", "currency"),
         ("investment_return", "Investment return (%)", "percent"),
         ("investment_tax_drag", "Investment tax drag (%)", "percent"),
         ("inflation", "Inflation (%)", "percent"),
     ],
+}
+
+OVERRIDE_HELP = {
+    "rent_growth_rate": "Annual growth rate applied to rent after year 1",
+    "home_appreciation_rate": "Long-run nominal home price appreciation",
+    "investment_tax_drag": "Effective annual reduction due to taxes on investments",
+    "capital_gains_tax_rate": "Tax rate applied to realized home price gains beyond exclusion",
+    "pmi_rate": "Annual PMI cost as a fraction of the original loan balance",
 }
 
 
@@ -154,6 +164,7 @@ with st.sidebar:
         "Run type",
         ["Deterministic", "Monte Carlo"],
         horizontal=True,
+        help="Choose between a single deterministic run or a Monte Carlo simulation",
     )
 
     st.divider()
@@ -164,12 +175,14 @@ with st.sidebar:
         "Scenario",
         scenarios,
         index=scenarios.index("base") if "base" in scenarios else 0,
+        help="Macroeconomic and housing market assumptions",
     )
 
     region = st.selectbox(
         "Region",
         regions,
         index=regions.index("US") if "US" in regions else 0,
+        help="Regional housing market characteristics",
     )
 
     horizon = st.slider(
@@ -178,6 +191,35 @@ with st.sidebar:
         max_value=50,
         value=30,
         step=1,
+        help="Length of time the rent vs buy decision is evaluated",
+    )
+
+    st.header("Model Regime Controls")
+
+    RENT_BASIS_OPTIONS = {
+        "Market rent": "market",
+        "Match mortgage payment": "match_mortgage",
+        "Match total owner cost": "match_owner_cost",
+    }
+
+    rent_basis_label = st.selectbox(
+        "Rent basis",
+        list(RENT_BASIS_OPTIONS.keys()),
+        help="Defines how renter housing costs are initialized in year 1",
+    )
+
+    rent_basis = RENT_BASIS_OPTIONS[rent_basis_label]
+
+    married = st.checkbox(
+        "Married filing jointly",
+        value=True,
+        help="Controls capital gains exclusion and tax treatment"
+    )
+
+    sell_at_end = st.checkbox(
+        "Sell home at end of horizon",
+        value=True,
+        help="If unchecked, home equity remains unrealized"
     )
 
     st.divider()
@@ -191,12 +233,39 @@ with st.sidebar:
         region=region,
         overrides=None,
         horizon=horizon,
+        rent_basis=rent_basis,
+        married=married,
+        sell_at_end=sell_at_end,
     )
 
     st.header("Active Assumptions")
 
     overrides = {}
     assumption_rows = []
+
+    # --------------------------------------------------
+    # Model Regime rows (prepend)
+    # --------------------------------------------------
+    assumption_rows.extend([
+        {
+            "Group": "Model Regime",
+            "Parameter": "Rent basis",
+            "Value": rent_basis_label,
+            "Source": "UI",
+        },
+        {
+            "Group": "Model Regime",
+            "Parameter": "Married filing jointly",
+            "Value": "Yes" if married else "No",
+            "Source": "UI",
+        },
+        {
+            "Group": "Model Regime",
+            "Parameter": "Sell home at end",
+            "Value": "Yes" if sell_at_end else "No",
+            "Source": "UI",
+        },
+    ])
 
     for group, params in PARAM_GROUPS.items():
         with st.expander(group, expanded=False):
@@ -209,6 +278,7 @@ with st.sidebar:
                         label,
                         value=float(base_val) * 100,
                         step=0.1,
+                        help=OVERRIDE_HELP.get(name, None),
                     ) / 100
 
                 elif kind == "currency":
@@ -216,6 +286,7 @@ with st.sidebar:
                         label,
                         value=float(base_val),
                         step=100.0,
+                        help=OVERRIDE_HELP.get(name, None),
                     )
 
                 elif kind == "int":
@@ -223,12 +294,14 @@ with st.sidebar:
                         label,
                         value=int(base_val),
                         step=1,
+                        help=OVERRIDE_HELP.get(name, None),
                     )
 
                 elif kind == "bool":
                     ui_val = st.checkbox(
                         label,
                         value=bool(base_val),
+                        help=OVERRIDE_HELP.get(name, None),
                     )
 
                 else:
@@ -369,6 +442,9 @@ if mode == "Deterministic":
         region=region,
         overrides=overrides,
         horizon=horizon,
+        rent_basis=rent_basis,
+        married=married,
+        sell_at_end=sell_at_end,
     )
 
     yearly = result.yearly
@@ -426,6 +502,9 @@ else:
         region=region,
         overrides=overrides,
         horizon=horizon,
+        rent_basis=rent_basis,
+        married=married,
+        sell_at_end=sell_at_end,
         n_sims=n_sims,
         seed=seed,
         mc_profile=mc_profile,
