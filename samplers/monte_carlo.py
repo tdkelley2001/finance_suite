@@ -97,6 +97,9 @@ def monte_carlo_run(
     region: str,
     overrides: Optional[Dict],
     horizon: int,
+    rent_basis: str,
+    married: bool,
+    sell_at_end: bool,
     n_sims: int,
     seed: int,
     mc_profile: str,
@@ -111,7 +114,15 @@ def monte_carlo_run(
     """
     np.random.seed(seed)
 
-    base = build_assumptions(scenario=scenario, region=region, overrides=overrides, horizon=horizon)
+    base = build_assumptions(
+        scenario=scenario,
+        region=region,
+        overrides=overrides,
+        horizon=horizon,
+        rent_basis=rent_basis,
+        married=married,
+        sell_at_end=sell_at_end,
+    )
 
     rows = []
     yearly_list = [] if keep_yearly else None

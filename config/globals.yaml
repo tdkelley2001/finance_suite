@@ -4,10 +4,7 @@ closing_costs_pct: 0.03
 maintenance_pct: 0.02
 pmi_rate: 0.007
 pmi_ltv_cutoff: 0.80
-sell_at_end: True
 selling_costs_pct: 0.06
-rent_basis: mortgage_matched  # options: market, mortgage_matched
-married: False
 capital_gains_tax_rate: 0.15
 capital_gains_exclusion_single: 250000
 investment_tax_drag: 0.015

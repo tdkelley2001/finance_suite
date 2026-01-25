@@ -11,7 +11,24 @@ def build_yearly_df(assump: Assumptions, rate_provider: RateProvider = None) -> 
     mortgage_df, annual_mortgage_payment, loan_amount = mortgage_schedule(assump)
 
     # Rent basis: market uses region monthly_rent, mortgage_matched uses the mortgage payment in year 1
-    base_annual_rent = annual_mortgage_payment if assump.rent_basis == "mortgage_matched" else assump.monthly_rent * 12
+    if assump.rent_basis == "match_mortgage":
+        base_annual_rent = annual_mortgage_payment
+    elif assump.rent_basis == "match_owner_cost":
+        # Approximate owner costs in year 1
+        maintenance = assump.home_price * assump.maintenance_pct
+        property_tax = assump.home_price * assump.property_tax_pct
+        hoa_annual = assump.hoa_monthly * 12
+        home_insurance = assump.homeowners_insurance_annual
+        owner_costs_year1 = (
+            annual_mortgage_payment
+            + property_tax
+            + maintenance
+            + hoa_annual
+            + home_insurance
+        )
+        base_annual_rent = owner_costs_year1
+    else:
+        base_annual_rent = assump.monthly_rent * 12
     
     home_value = assump.home_price
     annual_rent = base_annual_rent

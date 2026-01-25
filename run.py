@@ -10,6 +10,9 @@ def main():
     parser.add_argument("--scenario", default="base")
     parser.add_argument("--region", default="US")
     parser.add_argument("--horizon", type=int, default=30)
+    parser.add_argument("--rent_basis", choices=["market", "match_mortgage", "match_owner_cost"], default="market")
+    parser.add_argument("--married", action="store_true", default=False)
+    parser.add_argument("--sell_at_end", action="store_true", default=True)
     parser.add_argument("--n_sims", type=int, default=5000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--mc_profile", choices=["Baseline", "Conservative", "Volatile", "Stress"], default="Baseline")
@@ -18,7 +21,15 @@ def main():
     args = parser.parse_args()
 
     if args.mode == "deterministic":
-        result = deterministic_run(args.scenario, args.region, overrides=None, horizon=args.horizon)
+        result = deterministic_run(
+            args.scenario,
+            args.region,
+            overrides=None,
+            horizon=args.horizon,
+            rent_basis=args.rent_basis,
+            married=args.married,
+            sell_at_end=args.sell_at_end,
+        )
         print(result.summary)
 
     else:
@@ -27,6 +38,9 @@ def main():
             region=args.region,
             overrides=None,
             horizon=args.horizon,
+            rent_basis=args.rent_basis,
+            married=args.married,
+            sell_at_end=args.sell_at_end,
             n_sims=args.n_sims,
             seed=args.seed,
             mc_profile=args.mc_profile,

@@ -42,8 +42,8 @@ class Assumptions:
             raise ValueError("mortgage_term must be positive")
         if not (0 <= self.down_payment_pct <= 1):
             raise ValueError("down_payment_pct must be between 0 and 1")
-        if self.rent_basis not in {"market", "mortgage_matched"}:
-            raise ValueError("rent_basis must be 'market' or 'mortgage_matched'")
+        if self.rent_basis not in {"market", "match_mortgage", "match_owner_cost"}:
+            raise ValueError("rent_basis must be 'market', 'match_mortgage', or 'match_owner_cost'")
         if self.home_price <= 0:
             raise ValueError("home_price must be positive")
 
@@ -53,6 +53,9 @@ def build_assumptions(
     region: str,
     overrides: Optional[Dict[str, Any]] = None,
     horizon: int = 30,
+    rent_basis: str = "market",
+    married: bool = False,
+    sell_at_end: bool = True,
 ) -> Assumptions:
     scenarios = load_yaml("scenarios.yaml")
     regions = load_yaml("regions.yaml")
@@ -66,7 +69,7 @@ def build_assumptions(
     if overrides:
         params.update(overrides)
 
-    cap_excl = globals_["capital_gains_exclusion_single"] * (2 if globals_.get("married", False) else 1)
+    cap_excl = globals_["capital_gains_exclusion_single"] * (2 if married else 1)
 
     # Region tilts relative to US baselines, unless overridden explicitly
     if overrides and "home_appreciation_rate" in overrides:
@@ -99,9 +102,9 @@ def build_assumptions(
         pmi_rate=float(params["pmi_rate"]),
         pmi_ltv_cutoff=float(params["pmi_ltv_cutoff"]),
         home_appreciation_rate=home_appreciation_rate,
-        sell_at_end=bool(params["sell_at_end"]),
+        sell_at_end=bool(sell_at_end),
         selling_costs_pct=float(params["selling_costs_pct"]),
-        rent_basis=str(params["rent_basis"]),
+        rent_basis=str(rent_basis),
         monthly_rent=float(params["monthly_rent"]),
         rent_growth_rate=rent_growth_rate,
         renters_insurance_annual=float(params["renters_insurance_annual"]),
@@ -109,7 +112,7 @@ def build_assumptions(
         investment_return=float(params["investment_return"]),
         inflation=float(params["inflation"]),
         property_tax_pct=float(params["property_tax_pct"]),
-        married=bool(globals_.get("married", False)),
+        married=bool(married),
         capital_gains_exclusion_single=float(globals_["capital_gains_exclusion_single"]),
         capital_gains_tax_rate=float(globals_["capital_gains_tax_rate"]),
         capital_gains_exclusion=float(cap_excl),
