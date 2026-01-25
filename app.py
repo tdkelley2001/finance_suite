@@ -415,7 +415,12 @@ with st.sidebar:
         sell_at_end=sell_at_end,
     )
 
-    st.header("Active Assumptions")
+    override_count = 0
+    label = "Active Assumptions"
+    if override_count > 0:
+        label += f" ({override_count} override{'s' if override_count > 1 else ''})"
+
+    st.header(label)
 
     overrides = {}
     assumption_rows = []
@@ -423,27 +428,6 @@ with st.sidebar:
     # --------------------------------------------------
     # Model Regime rows (prepend)
     # --------------------------------------------------
-    assumption_rows.extend([
-        {
-            "Group": "Model Regime",
-            "Parameter": "Rent basis",
-            "Value": rent_basis_label,
-            "Source": "UI",
-        },
-        {
-            "Group": "Model Regime",
-            "Parameter": "Married filing jointly",
-            "Value": "Yes" if married else "No",
-            "Source": "UI",
-        },
-        {
-            "Group": "Model Regime",
-            "Parameter": "Sell home at end",
-            "Value": "Yes" if sell_at_end else "No",
-            "Source": "UI",
-        },
-    ])
-
     for group, params in PARAM_GROUPS.items():
         with st.expander(group, expanded=False):
             for name, label, kind in params:
@@ -501,6 +485,7 @@ with st.sidebar:
                 )
 
     overrides = overrides or None
+    override_count = len(overrides) if overrides else 0
 
     if mode == "Monte Carlo":
         st.divider()
@@ -514,36 +499,37 @@ with st.sidebar:
 
         profile_defaults = MC_PROFILES[mc_profile]
 
-        param_sd_scale = st.slider(
-            "Parameter uncertainty scale",
-            min_value=0.25,
-            max_value=3.0,
-            value=profile_defaults["param_sd_scale"],
-            step=0.05,
-        )
+        with st.expander("Advanced uncertainty controls", expanded=False):
+            param_sd_scale = st.slider(
+                "Parameter uncertainty scale",
+                min_value=0.25,
+                max_value=3.0,
+                value=profile_defaults["param_sd_scale"],
+                step=0.05,
+            )
 
-        path_sd_scale = st.slider(
-            "Path volatility scale",
-            min_value=0.25,
-            max_value=3.0,
-            value=profile_defaults["path_sd_scale"],
-            step=0.05,
-        )
+            path_sd_scale = st.slider(
+                "Path volatility scale",
+                min_value=0.25,
+                max_value=3.0,
+                value=profile_defaults["path_sd_scale"],
+                step=0.05,
+            )
 
-        n_sims = st.slider(
-            "Number of simulations",
-            min_value=1_000,
-            max_value=20_000,
-            value=5_000,
-            step=1_000,
-        )
+            n_sims = st.slider(
+                "Number of simulations",
+                min_value=1_000,
+                max_value=20_000,
+                value=5_000,
+                step=1_000,
+            )
 
-        seed = st.number_input(
-            "Random seed",
-            value=42,
-            step=1,
-            help="Controls reproducibility of Monte Carlo runs",
-        )
+            seed = st.number_input(
+                "Random seed",
+                value=42,
+                step=1,
+                help="Controls reproducibility of Monte Carlo runs",
+            )
     
     run_button = st.button("Run model", type="primary")
 
@@ -557,11 +543,36 @@ if not run_button:
 
 
 # ======================================================
+# Run context summary (lightweight, non-intrusive)
+# ======================================================
+st.subheader("Model Run Summary")
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("Scenario", scenario)
+c2.metric("Region", region)
+c3.metric("Horizon", f"{horizon} years")
+c4.metric("Overrides", override_count)
+
+c5, c6, c7, = st.columns(3)
+c5.metric("Rent Basis", rent_basis_label)
+c6.metric("Married", "Yes" if married else "No")
+c7.metric("Sell at End", "Yes" if sell_at_end else "No")
+
+
+st.caption(
+    "Results below reflect the current scenario baseline plus any manual overrides. "
+    "Use the assumptions summary to audit inputs."
+)
+
+st.divider()
+
+# ======================================================
 # Active assumptions summary table
 # ======================================================
-st.subheader("Assumptions and Limitations")
+st.subheader("Assumptions (Audit Trail)")
 
-with st.expander("Active Assumptions Summary"):
+with st.expander("Active Assumptions Summary", expanded=override_count > 0):
     assumptions_df = pd.DataFrame(assumption_rows)
 
     styled = (
@@ -573,6 +584,7 @@ with st.expander("Active Assumptions Summary"):
     st.dataframe(styled, use_container_width=True)
 
     st.markdown("""
+    Assumptions and Limitations:
     - Results depend heavily on assumptions and scenario selection.
     - Monte Carlo simulations represent hypothetical futures, not forecasts.
     - Taxes, financing constraints, and behavioral factors are simplified.
@@ -637,6 +649,8 @@ if mode == "Deterministic":
     yearly = result.yearly
     summary = result.summary
     waterfall = result.waterfall
+
+    st.subheader("Deterministic Model Results")
 
     tab_wealth, tab_cashflow, tab_start, tab_decompose = st.tabs([
         "Net Worth Outcomes",
@@ -704,6 +718,8 @@ else:
 
         det_net_worth_diff = det_result.summary["net_worth_diff"]
 
+        st.subheader("Monte Carlo Simulation Results")
+
         tab_summary, tab_timing, tab_risk, tab_sensitivity = st.tabs([
             "Summary",
             "Timing & Probability",
@@ -738,8 +754,12 @@ else:
 
             col1, col2, col3, col4 = st.columns(4)
 
-            col1.metric("Probability Owning Wins", f"{prob_owner_wins:.1%}")
-            col2.metric("Median Advantage", f"${median_diff:,.0f}")
+            col1.metric(
+                "Probability Owning Wins",
+                f"{prob_owner_wins:.1%}",
+                help="Fraction of simulated futures where owning ends with higher net worth than renting"
+            )
+            col2.metric("Median Advantage",f"${median_diff:,.0f}")
             col3.metric("10th Percentile", f"${p10:,.0f}")
             col4.metric("90th Percentile", f"${p90:,.0f}")
 
