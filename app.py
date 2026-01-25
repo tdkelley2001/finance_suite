@@ -6,6 +6,7 @@ import pandas as pd
 
 from config_loader import load_yaml_keys
 from engine.assumptions import build_assumptions
+from engine.mortgage import mortgage_schedule
 from samplers.monte_carlo import monte_carlo_run
 from samplers.deterministic import deterministic_run
 from samplers.monte_carlo import MC_PROFILES
@@ -54,6 +55,177 @@ def format_yearly_df(df: pd.DataFrame):
         elif col in INDEX_COLS:
             fmt[col] = "{:.3f}"
     return df.style.format(fmt)
+
+
+# ==================================================
+# Streamlit tabs
+# ==================================================
+def render_starting_position(baseline, yearly):
+    st.subheader("Starting Position (Year 0)")
+
+    dp_amount = baseline.home_price * baseline.down_payment_pct
+    initial_mortgage = baseline.home_price - dp_amount
+    initial_equity = dp_amount
+    initial_renter_balance = baseline.home_price * (
+        baseline.down_payment_pct + baseline.closing_costs_pct
+    )
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.markdown("**Owner**")
+        st.metric("Home Price", f"${baseline.home_price:,.0f}")
+        st.metric("Down Payment", f"${dp_amount:,.0f}")
+        st.metric("Initial Mortgage Balance", f"${initial_mortgage:,.0f}")
+        st.metric("Initial Home Equity", f"${initial_equity:,.0f}")
+
+    with c2:
+        st.markdown("**Renter**")
+        st.metric("Initial Investable Balance", f"${initial_renter_balance:,.0f}")
+        st.metric("Initial Annual Rent", f"${yearly.loc[0, 'annual_rent']:,.0f}")
+
+    st.subheader("Initial Monthly Housing Cost")
+
+    # Mortgage payment (annual → monthly)
+    mortgage_df, annual_mortgage_payment, _ = mortgage_schedule(baseline)
+    monthly_mortgage_payment = annual_mortgage_payment / 12
+    monthly_rent = yearly.loc[0, "annual_rent"] / 12
+    
+    c1, c2 = st.columns(2)
+    c1.metric("Monthly Mortgage Payment", f"${monthly_mortgage_payment:,.0f}")
+    c2.metric("Monthly Rent", f"${monthly_rent:,.0f}")
+
+
+def render_cashflow_section(yearly):
+    # Cashflow crossover
+    cf_diff = yearly["owner_cash_outflow"] - yearly["renter_cash_outflow"]
+    cf_cross = yearly.loc[cf_diff <= 0, "year"]
+    cf_year = int(cf_cross.iloc[0]) if not cf_cross.empty else None
+
+    st.metric(
+        "Cashflow Breakeven Year",
+        f"Year {cf_year}" if cf_year else "No breakeven in horizon",
+    )
+
+    st.divider()
+
+    st.subheader("Annual Cash Outflow Over Time")
+
+    cf_df = yearly[[
+        "year",
+        "owner_cash_outflow",
+        "renter_cash_outflow",
+    ]].melt(
+        id_vars="year",
+        var_name="Type",
+        value_name="Annual Cash Outflow",
+    )
+
+    cf_df["Type"] = cf_df["Type"].map({
+        "owner_cash_outflow": "Owner",
+        "renter_cash_outflow": "Renter",
+    })
+
+    fig = px.line(cf_df, x="year", y="Annual Cash Outflow", color="Type")
+    fig.update_layout(yaxis_title="Annual Cash Outflow ($)")
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Owner Cost Composition Over Time")
+
+    cost_cols = [
+        "interest_paid",
+        "pmi_paid",
+        "property_tax",
+        "maintenance",
+        "hoa_annual",
+        "home_insurance",
+    ]
+
+    cost_df = yearly[["year"] + cost_cols].melt(
+        id_vars="year",
+        var_name="Cost Type",
+        value_name="Annual Cost",
+    )
+
+    cost_labels = {
+        "interest_paid": "Mortgage Interest",
+        "pmi_paid": "PMI",
+        "property_tax": "Property Tax",
+        "maintenance": "Maintenance",
+        "hoa_annual": "HOA",
+        "home_insurance": "Insurance",
+    }
+
+    cost_df["Cost Type"] = cost_df["Cost Type"].map(cost_labels)
+
+    fig = px.area(
+        cost_df,
+        x="year",
+        y="Annual Cost",
+        color="Cost Type",
+    )
+
+    fig.update_layout(yaxis_title="Annual Cost ($)")
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_net_worth_section(yearly, summary, horizon):
+    st.subheader(rf"Ending Position (Year {horizon})")
+
+    
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Owner Net Worth", f"${summary['owner_net_worth']:,.0f}")
+    col2.metric("Renter Net Worth", f"${summary['renter_net_worth']:,.0f}")
+    col3.metric("Owner − Renter", f"${summary['net_worth_diff']:,.0f}")
+
+    # Net worth crossover
+    nw_diff = yearly["owner_net_worth"] - yearly["renter_net_worth"]
+    nw_cross = yearly.loc[nw_diff >= 0, "year"]
+    nw_year = int(nw_cross.iloc[0]) if not nw_cross.empty else None
+
+    st.metric(
+        "Net Worth Breakeven Year",
+        f"Year {nw_year}" if nw_year else "No breakeven in horizon",
+    )
+
+    st.divider()
+    st.subheader("Net Worth Over Time")
+
+    path_df = yearly[["year", "owner_net_worth", "renter_net_worth"]].melt(
+        id_vars="year",
+        var_name="Type",
+        value_name="Net Worth",
+    )
+
+    fig = px.line(path_df, x="year", y="Net Worth", color="Type")
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_decomposition_section(waterfall, yearly):
+    st.subheader("Economic Decomposition")
+
+    fig = go.Figure(
+        go.Waterfall(
+            x=waterfall["category"],
+            y=waterfall["value"],
+            measure=[
+                "absolute",
+                "relative",
+                "relative",
+                "relative",
+                "relative",
+                "relative",
+                "total",
+            ],
+        )
+    )
+
+    fig.update_layout(yaxis_title="Net Worth ($)", showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
+
+    with st.expander("Full yearly detail"):
+        st.dataframe(format_yearly_df(yearly), use_container_width=True)
 
 
 # ==================================================
@@ -389,7 +561,17 @@ if not run_button:
 # ======================================================
 st.subheader("Active Assumptions Summary")
 
-with st.expander("Assumptions & limitations"):
+with st.expander("Assumptions & Limitations"):
+    assumptions_df = pd.DataFrame(assumption_rows)
+
+    styled = (
+        assumptions_df
+        .style
+        .apply(highlight_overrides, axis=1)
+    )
+
+    st.dataframe(styled, use_container_width=True)
+
     st.markdown("""
     - Results depend heavily on assumptions and scenario selection.
     - Monte Carlo simulations represent hypothetical futures, not forecasts.
@@ -398,16 +580,6 @@ with st.expander("Assumptions & limitations"):
 
     Use this tool to explore tradeoffs and sensitivity, not to make definitive decisions.
     """)
-
-assumptions_df = pd.DataFrame(assumption_rows)
-
-styled = (
-    assumptions_df
-    .style
-    .apply(highlight_overrides, axis=1)
-)
-
-st.dataframe(styled, use_container_width=True)
 
 
 # ======================================================
@@ -466,47 +638,24 @@ if mode == "Deterministic":
     summary = result.summary
     waterfall = result.waterfall
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Owner Net Worth", f"${summary['owner_net_worth']:,.0f}")
-    col2.metric("Renter Net Worth", f"${summary['renter_net_worth']:,.0f}")
-    col3.metric("Owner − Renter", f"${summary['net_worth_diff']:,.0f}")
+    tab_start, tab_cashflow, tab_wealth, tab_decompose = st.tabs([
+        "Starting Position",
+        "Cashflow & Affordability",
+        "Net Worth Outcomes",
+        "Why This Happens",
+    ])
 
-    st.divider()
+    with tab_start:
+        render_starting_position(baseline, yearly)
 
-    st.subheader("Net Worth Over Time")
+    with tab_cashflow:
+        render_cashflow_section(yearly)
 
-    path_df = yearly[["year", "owner_net_worth", "renter_net_worth"]].melt(
-        id_vars="year",
-        var_name="Type",
-        value_name="Net Worth",
-    )
+    with tab_wealth:
+        render_net_worth_section(yearly, summary, horizon)
 
-    fig = px.line(path_df, x="year", y="Net Worth", color="Type")
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.subheader("Economic Decomposition")
-
-    fig = go.Figure(
-        go.Waterfall(
-            x=waterfall["category"],
-            y=waterfall["value"],
-            measure=[
-                "absolute",
-                "relative",
-                "relative",
-                "relative",
-                "relative",
-                "relative",
-                "total",
-            ],
-        )
-    )
-
-    fig.update_layout(yaxis_title="Net Worth ($)", showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
-
-    with st.expander("Full yearly detail"):
-        st.dataframe(format_yearly_df(yearly), use_container_width=True)
+    with tab_decompose:
+        render_decomposition_section(waterfall, yearly)
 
 # ======================================================
 # MONTE CARLO MODE

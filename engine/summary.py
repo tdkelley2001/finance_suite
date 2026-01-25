@@ -40,7 +40,7 @@ def build_summary(yearly: pd.DataFrame, assump: Assumptions):
             ("Principal Paydown", float(yearly["principal_paid"].sum())),
             ("Mortgage Interest", -float(yearly["interest_paid"].sum())),
             ("Owner Carrying Costs (economic)", -float(yearly["owner_economic_cost"].sum())),
-            ("Opportunity Cost of DP", -float(opportunity_cost)),
+            ("Opportunity Cost of Down Payment", -float(opportunity_cost)),
             ("Owner Net Worth", owner_net),
         ],
         columns=["category", "value"],
