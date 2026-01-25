@@ -1,5 +1,5 @@
-# app.py
 import streamlit as st
+from typing import Dict, Optional, Tuple
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -8,6 +8,7 @@ from config_loader import load_yaml_keys
 from engine.assumptions import build_assumptions
 from samplers.monte_carlo import monte_carlo_run
 from samplers.deterministic import deterministic_run
+from samplers.monte_carlo import MC_PROFILES
 
 
 # ==================================================
@@ -74,18 +75,24 @@ st.caption("Deterministic and Monte Carlo analysis of long-run net worth")
 def run_mc_cached(
     scenario: str,
     region: str,
+    overrides: Optional[Dict],
     horizon: int,
     n_sims: int,
-    parameter_uncertainty: bool,
-    path_uncertainty: bool,
+    seed: int,
+    mc_profile: str,
+    param_sd_scale: float,
+    path_sd_scale: float,
 ):
     return monte_carlo_run(
         scenario=scenario,
         region=region,
+        overrides=overrides,
         horizon=horizon,
         n_sims=n_sims,
-        parameter_uncertainty=parameter_uncertainty,
-        path_uncertainty=path_uncertainty,
+        seed=seed,
+        mc_profile=mc_profile,
+        param_sd_scale=param_sd_scale,
+        path_sd_scale=path_sd_scale,
         keep_yearly=False,
     )
 
@@ -249,6 +256,30 @@ with st.sidebar:
         st.divider()
         st.header("Simulation Settings")
 
+        mc_profile = st.selectbox(
+            "Monte Carlo profile",
+            list(MC_PROFILES.keys()),
+            index=0,
+        )
+
+        profile_defaults = MC_PROFILES[mc_profile]
+
+        param_sd_scale = st.slider(
+            "Parameter uncertainty scale",
+            min_value=0.25,
+            max_value=3.0,
+            value=profile_defaults["param_sd_scale"],
+            step=0.05,
+        )
+
+        path_sd_scale = st.slider(
+            "Path volatility scale",
+            min_value=0.25,
+            max_value=3.0,
+            value=profile_defaults["path_sd_scale"],
+            step=0.05,
+        )
+
         n_sims = st.slider(
             "Number of simulations",
             min_value=1_000,
@@ -257,8 +288,12 @@ with st.sidebar:
             step=1_000,
         )
 
-        parameter_uncertainty = st.checkbox("Parameter uncertainty", value=True)
-        path_uncertainty = st.checkbox("Path uncertainty", value=True)
+        seed = st.number_input(
+            "Random seed",
+            value=42,
+            step=1,
+            help="Controls reproducibility of Monte Carlo runs",
+        )
     
     run_button = st.button("Run model", type="primary")
 
@@ -389,10 +424,13 @@ else:
     df, _ = run_mc_cached(
         scenario=scenario,
         region=region,
+        overrides=overrides,
         horizon=horizon,
         n_sims=n_sims,
-        parameter_uncertainty=parameter_uncertainty,
-        path_uncertainty=path_uncertainty,
+        seed=seed,
+        mc_profile=mc_profile,
+        param_sd_scale=param_sd_scale,
+        path_sd_scale=path_sd_scale,
     )
 
     prob_owner_wins = (df["net_worth_diff"] > 0).mean()
