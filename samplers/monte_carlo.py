@@ -8,6 +8,13 @@ from engine.engine import run_engine
 from engine.rate_provider import RatePaths, PathRateProvider, DeterministicRateProvider
 from samplers.distributions import NormalDist
 
+# Predefined Monte Carlo profiles
+MC_PROFILES = {
+    "Baseline": {"param_sd_scale": 1.0, "path_sd_scale": 1.0},
+    "Conservative": {"param_sd_scale": 0.75, "path_sd_scale": 0.75},
+    "Volatile": {"param_sd_scale": 1.25, "path_sd_scale": 1.25},
+    "Stress": {"param_sd_scale": 1.5, "path_sd_scale": 1.75},
+}
 
 # Parameter-level uncertainty: sample the per-run constants (means)
 DEFAULT_PARAM_DISTS = {
@@ -39,7 +46,7 @@ DEFAULT_PATH_CLIPS = {
 }
 
 
-def _sample_parameters(base: Assumptions, param_dists=None) -> Assumptions:
+def _sample_parameters(base: Assumptions, param_sd_scale: float = 1.0, param_dists=None) -> Assumptions:
     """
     Samples per-run parameters and returns a new Assumptions.
     """
@@ -48,7 +55,12 @@ def _sample_parameters(base: Assumptions, param_dists=None) -> Assumptions:
 
     for field, dist_factory in param_dists.items():
         dist = dist_factory(sampled)
-        val = dist.sample()
+        scaled_dist = NormalDist(
+            getattr(sampled, field),
+            dist.sd * param_sd_scale,
+            clip=dist.clip,
+        )
+        val = scaled_dist.sample()
         # Handle clips with None upper bound
         if isinstance(val, np.ndarray):
             val = float(val.item())
@@ -60,13 +72,13 @@ def _sample_parameters(base: Assumptions, param_dists=None) -> Assumptions:
     return sampled
 
 
-def _sample_paths(assump: Assumptions, horizon: int, path_sds=None) -> RatePaths:
+def _sample_paths(assump: Assumptions, horizon: int, path_sd_scale: float = 1.0, path_sds=None) -> RatePaths:
     path_sds = path_sds or DEFAULT_PATH_SDS
 
-    inv = NormalDist(assump.investment_return, path_sds["investment_return"], clip=DEFAULT_PATH_CLIPS["investment_return"]).sample(size=horizon)
-    home = NormalDist(assump.home_appreciation_rate, path_sds["home_appreciation"], clip=DEFAULT_PATH_CLIPS["home_appreciation"]).sample(size=horizon)
-    rent = NormalDist(assump.rent_growth_rate, path_sds["rent_growth"], clip=DEFAULT_PATH_CLIPS["rent_growth"]).sample(size=horizon)
-    infl = NormalDist(assump.inflation, path_sds["inflation"], clip=DEFAULT_PATH_CLIPS["inflation"]).sample(size=horizon)
+    inv = NormalDist(assump.investment_return, path_sds["investment_return"] * path_sd_scale, clip=DEFAULT_PATH_CLIPS["investment_return"]).sample(size=horizon)
+    home = NormalDist(assump.home_appreciation_rate, path_sds["home_appreciation"] * path_sd_scale, clip=DEFAULT_PATH_CLIPS["home_appreciation"]).sample(size=horizon)
+    rent = NormalDist(assump.rent_growth_rate, path_sds["rent_growth"] * path_sd_scale, clip=DEFAULT_PATH_CLIPS["rent_growth"]).sample(size=horizon)
+    infl = NormalDist(assump.inflation, path_sds["inflation"] * path_sd_scale, clip=DEFAULT_PATH_CLIPS["inflation"]).sample(size=horizon)
 
     paths = RatePaths(
         investment_return=np.asarray(inv, dtype=float),
@@ -81,12 +93,13 @@ def _sample_paths(assump: Assumptions, horizon: int, path_sds=None) -> RatePaths
 def monte_carlo_run(
     scenario: str,
     region: str,
-    overrides: Optional[Dict] = None,
-    horizon: int = 30,
-    n_sims: int = 5000,
-    seed: int = 42,
-    parameter_uncertainty: bool = True,
-    path_uncertainty: bool = True,
+    overrides: Optional[Dict],
+    horizon: int,
+    n_sims: int,
+    seed: int,
+    mc_profile: str,
+    param_sd_scale: float,
+    path_sd_scale: float,
     keep_yearly: bool = False,
 ) -> Tuple[pd.DataFrame, Optional[list]]:
     """
@@ -102,14 +115,16 @@ def monte_carlo_run(
     yearly_list = [] if keep_yearly else None
 
     for _ in range(n_sims):
-        assump_i = _sample_parameters(base) if parameter_uncertainty else base
-
-        if path_uncertainty:
-            paths = _sample_paths(assump_i, horizon=horizon)
-            provider = PathRateProvider(paths)
-        else:
-            provider = DeterministicRateProvider(assump_i)
-
+        assump_i = _sample_parameters(
+            base,
+            param_sd_scale=param_sd_scale,
+        )
+        paths = _sample_paths(
+            assump_i,
+            horizon=horizon,
+            path_sd_scale=path_sd_scale,
+        )
+        provider = PathRateProvider(paths)
         result = run_engine(assump_i, rate_provider=provider)
 
         rows.append(
