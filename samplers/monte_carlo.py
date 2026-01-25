@@ -3,11 +3,6 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from engine.assumptions import build_assumptions, Assumptions
-from engine.engine import run_engine
-from engine.rate_provider import RatePaths, PathRateProvider, DeterministicRateProvider
-from samplers.distributions import NormalDist
-
 # Predefined Monte Carlo profiles
 MC_PROFILES = {
     "Baseline": {"param_sd_scale": 1.0, "path_sd_scale": 1.0},
@@ -15,6 +10,13 @@ MC_PROFILES = {
     "Volatile": {"param_sd_scale": 1.25, "path_sd_scale": 1.25},
     "Stress": {"param_sd_scale": 1.5, "path_sd_scale": 1.75},
 }
+
+from engine.assumptions import build_assumptions, Assumptions
+from engine.engine import run_engine
+from engine.rate_provider import RatePaths, PathRateProvider, DeterministicRateProvider
+from samplers.distributions import NormalDist
+
+
 
 # Parameter-level uncertainty: sample the per-run constants (means)
 DEFAULT_PARAM_DISTS = {
