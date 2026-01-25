@@ -224,3 +224,11 @@ samplers/
 app.py                 # Streamlit application
 scenarios.yaml         # Economic scenarios
 regions.yaml           # Regional assumptions
+
+---
+
+### Development Environment
+
+This repository includes an optional `.devcontainer` configuration for use with
+VS Code Dev Containers or GitHub Codespaces. It is not required to run the model
+locally or on Streamlit Cloud.
