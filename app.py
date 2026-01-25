@@ -66,6 +66,11 @@ st.set_page_config(
 
 st.title("🏠 Rent vs Buy Model")
 st.caption("Deterministic and Monte Carlo analysis of long-run net worth")
+st.warning(
+    "This tool is for educational and exploratory purposes only. "
+    "It is not financial advice or a recommendation. "
+    "Results are highly assumption-dependent and represent hypothetical outcomes, not predictions."
+)
 
 
 # ==================================================
@@ -383,6 +388,16 @@ if not run_button:
 # Active assumptions summary table
 # ======================================================
 st.subheader("Active Assumptions Summary")
+
+with st.expander("Assumptions & limitations"):
+    st.markdown("""
+    - Results depend heavily on assumptions and scenario selection.
+    - Monte Carlo simulations represent hypothetical futures, not forecasts.
+    - Taxes, financing constraints, and behavioral factors are simplified.
+    - Liquidity risk and life events are not explicitly modeled.
+
+    Use this tool to explore tradeoffs and sensitivity, not to make definitive decisions.
+    """)
 
 assumptions_df = pd.DataFrame(assumption_rows)
 
