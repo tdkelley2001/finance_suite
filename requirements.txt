@@ -1,5 +1,5 @@
-pandas
-numpy
-pyyaml
-streamlit
-plotly
+pandas==2.3.3
+numpy==2.4.1
+pyyaml==6.0.3
+streamlit==1.53.1
+plotly==6.5.2
