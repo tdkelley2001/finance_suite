@@ -14,6 +14,22 @@ It is implemented as both:
 
 ---
 
+## Disclaimer
+
+This model is provided **for educational and exploratory purposes only**.
+
+It is **not financial advice**, **not investment advice**, and **not a recommendation** to rent, buy, sell, or hold any asset.
+
+Key limitations to keep in mind:
+- Results are **highly sensitive to assumptions**. Small changes in inputs can materially change outcomes.
+- Scenarios and Monte Carlo simulations represent **hypothetical futures**, not forecasts or predictions.
+- The model simplifies reality and omits many real-world considerations (liquidity constraints, credit availability, behavioral factors, local tax nuances, transaction frictions, personal risk tolerance, and life events).
+- Outputs should be interpreted as **decision-support illustrations**, not point estimates or guarantees.
+
+You are solely responsible for how you interpret and use the results. Consider consulting qualified professionals before making real financial decisions.
+
+---
+
 ## Core Question
 
 > *Under a given set of assumptions, what is the distribution of long-run net worth outcomes for renting vs owning?*
@@ -103,6 +119,35 @@ These controls:
 This distinction ensures clarity between:
 - *how the model works* and
 - *what values it uses*.
+
+---
+
+## Assumptions & Limitations
+
+This model intentionally simplifies reality in order to make tradeoffs explicit and analyzable. Key assumptions and limitations include:
+
+### Economic & Market Assumptions
+- Long-run rates (investment returns, home appreciation, rent growth, inflation) are modeled as **stationary within a scenario**, even though real economies experience regime shifts.
+- Monte Carlo simulations represent **plausible futures**, not forecasts or probability-weighted predictions of actual outcomes.
+- Correlations between economic variables are simplified and may not fully capture real-world dynamics.
+
+### Housing & Financing Simplifications
+- Mortgage terms are assumed to remain fixed as specified (no refinancing, recasting, or rate renegotiation).
+- Credit constraints, underwriting frictions, and borrower behavior are not modeled.
+- Liquidity risk and the inability to access home equity when needed are not explicitly priced.
+
+### Taxes & Legal Nuance
+- Tax treatment is modeled at a **high level** and may not reflect jurisdiction-specific rules, deductions, credits, or timing effects.
+- Changes in tax law over time are not modeled.
+
+### Behavioral & Life Factors (Not Modeled)
+- Job mobility, family changes, health events, and preference shifts are excluded.
+- Psychological utility (stability, flexibility, stress) is not quantified.
+- Forced sales, foreclosures, and distress scenarios are not explicitly simulated.
+
+### Interpretation Guidance
+- Outputs should be interpreted **comparatively**, not as absolute truth.
+- The model is best used to understand **sensitivity, tradeoffs, and risk distributions**, not to produce a single “correct” decision.
 
 ---
 
@@ -228,7 +273,7 @@ regions.yaml           # Regional assumptions
 
 ---
 
-### Development Environment
+## Development Environment
 
 This repository includes an optional `.devcontainer` configuration for use with
 VS Code Dev Containers or GitHub Codespaces. It is not required to run the model
