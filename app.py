@@ -559,9 +559,9 @@ if not run_button:
 # ======================================================
 # Active assumptions summary table
 # ======================================================
-st.subheader("Active Assumptions Summary")
+st.subheader("Assumptions and Limitations")
 
-with st.expander("Assumptions & Limitations"):
+with st.expander("Active Assumptions Summary"):
     assumptions_df = pd.DataFrame(assumption_rows)
 
     styled = (
@@ -638,21 +638,21 @@ if mode == "Deterministic":
     summary = result.summary
     waterfall = result.waterfall
 
-    tab_start, tab_cashflow, tab_wealth, tab_decompose = st.tabs([
-        "Starting Position",
-        "Cashflow & Affordability",
+    tab_wealth, tab_cashflow, tab_start, tab_decompose = st.tabs([
         "Net Worth Outcomes",
+        "Cashflow & Affordability",
+        "Starting Position",
         "Why This Happens",
     ])
 
-    with tab_start:
-        render_starting_position(baseline, yearly)
+    with tab_wealth:
+        render_net_worth_section(yearly, summary, horizon)
 
     with tab_cashflow:
         render_cashflow_section(yearly)
-
-    with tab_wealth:
-        render_net_worth_section(yearly, summary, horizon)
+    
+    with tab_start:
+        render_starting_position(baseline, yearly)
 
     with tab_decompose:
         render_decomposition_section(waterfall, yearly)
@@ -661,255 +661,254 @@ if mode == "Deterministic":
 # MONTE CARLO MODE
 # ======================================================
 else:
-    df, yearly_list = run_mc_cached(
-        scenario=scenario,
-        region=region,
-        overrides=overrides,
-        horizon=horizon,
-        rent_basis=rent_basis,
-        married=married,
-        sell_at_end=sell_at_end,
-        n_sims=n_sims,
-        seed=seed,
-        mc_profile=mc_profile,
-        param_sd_scale=param_sd_scale,
-        path_sd_scale=path_sd_scale,
-    )
-
-    # Stack all Monte Carlo yearly paths
-    mc_yearly = pd.concat(
-        [
-            sim_df.assign(sim=i)
-            for i, sim_df in enumerate(yearly_list)
-        ],
-        ignore_index=True,
-    )
-
-    # Net worth difference per simulation-year
-    mc_yearly["net_worth_diff"] = (
-        mc_yearly["owner_net_worth"] - mc_yearly["renter_net_worth"]
-    )
-
-    # Deterministic baseline for Monte Carlo reference
-    det_result = deterministic_run(
-        scenario=scenario,
-        region=region,
-        overrides=overrides,
-        horizon=horizon,
-        rent_basis=rent_basis,
-        married=married,
-        sell_at_end=sell_at_end,
-    )
-
-    det_net_worth_diff = det_result.summary["net_worth_diff"]
-
-    tab_summary, tab_timing, tab_risk, tab_sensitivity = st.tabs([
-        "Summary",
-        "Timing & Probability",
-        "Downside Risk",
-        "Sensitivity",
-    ])
-
-    with tab_summary:
-        st.subheader("Monte Carlo Summary")
-
-        st.subheader("Monte Carlo Summary")
-
-        # -------------------------------
-        # Baseline reference (anchor)
-        # -------------------------------
-        st.markdown("### Baseline reference (deterministic)")
-
-        st.metric(
-            "Deterministic Net Worth Difference",
-            f"${det_net_worth_diff:,.0f}",
+    with st.spinner("Running Monte Carlo simulation..."):
+        df, yearly_list = run_mc_cached(
+            scenario=scenario,
+            region=region,
+            overrides=overrides,
+            horizon=horizon,
+            rent_basis=rent_basis,
+            married=married,
+            sell_at_end=sell_at_end,
+            n_sims=n_sims,
+            seed=seed,
+            mc_profile=mc_profile,
+            param_sd_scale=param_sd_scale,
+            path_sd_scale=path_sd_scale,
         )
 
-        st.caption(
-            "This is the single-scenario outcome before introducing uncertainty. "
-            "Monte Carlo results below show how outcomes vary around this baseline."
+        # Stack all Monte Carlo yearly paths
+        mc_yearly = pd.concat(
+            [
+                sim_df.assign(sim=i)
+                for i, sim_df in enumerate(yearly_list)
+            ],
+            ignore_index=True,
         )
 
-        st.divider()
-
-        prob_owner_wins = (df["net_worth_diff"] > 0).mean()
-        median_diff = df["net_worth_diff"].median()
-        p10 = df["net_worth_diff"].quantile(0.10)
-        p90 = df["net_worth_diff"].quantile(0.90)
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        col1.metric("Probability Owning Wins", f"{prob_owner_wins:.1%}")
-        col2.metric("Median Advantage", f"${median_diff:,.0f}")
-        col3.metric("10th Percentile", f"${p10:,.0f}")
-        col4.metric("90th Percentile", f"${p90:,.0f}")
-
-        with st.expander("Summary statistics"):
-            st.dataframe(
-                df["net_worth_diff"]
-                .describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
-                .to_frame("Net Worth Difference")
-                .style.format("${:,.0f}")
-            )
-
-    with tab_timing:
-        st.subheader("Probability Owning Wins Over Time")
-
-        prob_df = (
-            mc_yearly
-            .groupby("year")["net_worth_diff"]
-            .apply(lambda s: (s > 0).mean())
-            .reset_index(name="prob_owner_wins")
+        # Net worth difference per simulation-year
+        mc_yearly["net_worth_diff"] = (
+            mc_yearly["owner_net_worth"] - mc_yearly["renter_net_worth"]
         )
 
-        fig = px.line(
-            prob_df,
-            x="year",
-            y="prob_owner_wins",
-            labels={"prob_owner_wins": "Probability Owning Wins"},
-        )
-        fig.update_yaxes(tickformat=".0%")
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.caption(
-            "Shows how the likelihood of owning outperforming renting evolves over time across simulated futures. "
-            "Probabilities are based on pre-sale equity at each year. "
-            "Final realized outcomes (after selling costs and taxes) are shown in the Summary tab."
+        # Deterministic baseline for Monte Carlo reference
+        det_result = deterministic_run(
+            scenario=scenario,
+            region=region,
+            overrides=overrides,
+            horizon=horizon,
+            rent_basis=rent_basis,
+            married=married,
+            sell_at_end=sell_at_end,
         )
 
-        st.subheader("Net Worth Advantage Over Time (Uncertainty Bands)")
+        det_net_worth_diff = det_result.summary["net_worth_diff"]
 
-        band_df = (
-            mc_yearly
-            .groupby("year")["net_worth_diff"]
-            .quantile([0.10, 0.50, 0.90])
-            .unstack()
-            .reset_index()
-            .rename(columns={0.10: "p10", 0.50: "median", 0.90: "p90"})
-        )
-
-        fig = go.Figure()
-        fig.add_traces([
-            go.Scatter(
-                x=band_df["year"],
-                y=band_df["p90"],
-                line=dict(width=0),
-                showlegend=False,
-            ),
-            go.Scatter(
-                x=band_df["year"],
-                y=band_df["p10"],
-                fill="tonexty",
-                name="10–90% range",
-            ),
-            go.Scatter(
-                x=band_df["year"],
-                y=band_df["median"],
-                name="Median outcome",
-                line=dict(width=3),
-            ),
+        tab_summary, tab_timing, tab_risk, tab_sensitivity = st.tabs([
+            "Summary",
+            "Timing & Probability",
+            "Downside Risk",
+            "Sensitivity",
         ])
 
-        fig.update_layout(
-            yaxis_title="Owner − Renter Net Worth ($)",
-            hovermode="x unified",
-        )
+        with tab_summary:
+            st.subheader("Monte Carlo Summary")
 
-        st.plotly_chart(fig, use_container_width=True)
+            # -------------------------------
+            # Baseline reference (anchor)
+            # -------------------------------
+            st.markdown("### Baseline reference (deterministic)")
 
-        st.caption(
-            "The shaded region shows the middle 80% of outcomes. "
-            "The line shows the typical (median) advantage of owning over time."
-        )
+            st.metric(
+                "Deterministic Net Worth Difference",
+                f"${det_net_worth_diff:,.0f}",
+            )
 
-    with tab_risk:
-        st.subheader("Downside Risk")
+            st.caption(
+                "This is the single-scenario outcome before introducing uncertainty. "
+                "Monte Carlo results below show how outcomes vary around this baseline."
+            )
 
-        prob_owner_loses = (df["net_worth_diff"] < 0).mean()
-        p10 = df["net_worth_diff"].quantile(0.10)
-        p05 = df["net_worth_diff"].quantile(0.05)
+            st.divider()
 
-        col1, col2, col3 = st.columns(3)
+            prob_owner_wins = (df["net_worth_diff"] > 0).mean()
+            median_diff = df["net_worth_diff"].median()
+            p10 = df["net_worth_diff"].quantile(0.10)
+            p90 = df["net_worth_diff"].quantile(0.90)
 
-        col1.metric(
-            "Chance Owning Underperforms",
-            f"{prob_owner_loses:.1%}",
-        )
+            col1, col2, col3, col4 = st.columns(4)
 
-        col2.metric(
-            "Worst 1-in-10 Outcome",
-            f"${p10:,.0f}",
-        )
+            col1.metric("Probability Owning Wins", f"{prob_owner_wins:.1%}")
+            col2.metric("Median Advantage", f"${median_diff:,.0f}")
+            col3.metric("10th Percentile", f"${p10:,.0f}")
+            col4.metric("90th Percentile", f"${p90:,.0f}")
 
-        col3.metric(
-            "Worst 1-in-20 Outcome",
-            f"${p05:,.0f}",
-        )
+        with tab_timing:
+            st.subheader("Probability Owning Wins Over Time")
 
-        st.caption(
-            "These metrics focus on adverse but plausible outcomes. "
-            "For example, the 10th percentile represents a poor outcome that occurs roughly 1 in 10 simulations."
-        )
+            prob_df = (
+                mc_yearly
+                .groupby("year")["net_worth_diff"]
+                .apply(lambda s: (s > 0).mean())
+                .reset_index(name="prob_owner_wins")
+            )
 
-        st.divider()
+            fig = px.line(
+                prob_df,
+                x="year",
+                y="prob_owner_wins",
+                labels={"prob_owner_wins": "Probability Owning Wins"},
+            )
+            fig.update_yaxes(tickformat=".0%")
+            st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("Distribution of Net Worth Difference")
+            st.caption(
+                "Shows how the likelihood of owning outperforming renting evolves over time across simulated futures. "
+                "Probabilities are based on pre-sale equity at each year. "
+                "Final realized outcomes (after selling costs and taxes) are shown in the Summary tab."
+            )
 
-        fig = px.histogram(df, x="net_worth_diff", nbins=80, marginal="box")
-        fig.add_vline(x=0, line_dash="dash", line_color="red")
-        st.plotly_chart(fig, use_container_width=True)
+            st.subheader("Net Worth Advantage Over Time (Uncertainty Bands)")
 
-    with tab_sensitivity:
-        st.subheader("Sensitivity Analysis (What Matters Most)")
+            band_df = (
+                mc_yearly
+                .groupby("year")["net_worth_diff"]
+                .quantile([0.10, 0.50, 0.90])
+                .unstack()
+                .reset_index()
+                .rename(columns={0.10: "p10", 0.50: "median", 0.90: "p90"})
+            )
 
-        base_diff = det_net_worth_diff
+            fig = go.Figure()
+            fig.add_traces([
+                go.Scatter(
+                    x=band_df["year"],
+                    y=band_df["p90"],
+                    line=dict(width=0),
+                    showlegend=False,
+                ),
+                go.Scatter(
+                    x=band_df["year"],
+                    y=band_df["p10"],
+                    fill="tonexty",
+                    name="10–90% range",
+                ),
+                go.Scatter(
+                    x=band_df["year"],
+                    y=band_df["median"],
+                    name="Median outcome",
+                    line=dict(width=3),
+                ),
+            ])
 
-        SENS_PARAMS = [
-            ("home_appreciation_rate", "Home appreciation"),
-            ("investment_return", "Investment return"),
-            ("rent_growth_rate", "Rent growth"),
-            ("mortgage_rate", "Mortgage rate"),
-            ("maintenance_pct", "Maintenance cost"),
-        ]
+            fig.update_layout(
+                yaxis_title="Owner − Renter Net Worth ($)",
+                hovermode="x unified",
+            )
 
-        impacts = []
+            st.plotly_chart(fig, use_container_width=True)
 
-        for param, label in SENS_PARAMS:
-            base_val = getattr(baseline, param)
-            bump = 0.01 if "rate" in param or "pct" in param else base_val * 0.01
+            st.caption(
+                "The shaded region shows the middle 80% of outcomes. "
+                "The line shows the typical (median) advantage of owning over time."
+            )
 
-            for direction, sign in [("Down", -1), ("Up", 1)]:
-                overrides_sens = {param: base_val + sign * bump}
+        with tab_risk:
+            st.subheader("Downside Risk")
 
-                res = deterministic_run(
-                    scenario=scenario,
-                    region=region,
-                    overrides=overrides_sens,
-                    horizon=horizon,
-                    rent_basis=rent_basis,
-                    married=married,
-                    sell_at_end=sell_at_end,
+            prob_owner_loses = (df["net_worth_diff"] < 0).mean()
+            p10 = df["net_worth_diff"].quantile(0.10)
+            p05 = df["net_worth_diff"].quantile(0.05)
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Chance Owning Underperforms",
+                f"{prob_owner_loses:.1%}",
+            )
+
+            col2.metric(
+                "Worst 1-in-10 Outcome",
+                f"${p10:,.0f}",
+            )
+
+            col3.metric(
+                "Worst 1-in-20 Outcome",
+                f"${p05:,.0f}",
+            )
+
+            st.caption(
+                "These metrics focus on adverse but plausible outcomes. "
+                "For example, the 10th percentile represents a poor outcome that occurs roughly 1 in 10 simulations."
+            )
+
+            st.divider()
+
+            st.subheader("Distribution of Net Worth Difference")
+
+            fig = px.histogram(df, x="net_worth_diff", nbins=80, marginal="box")
+            fig.add_vline(x=0, line_dash="dash", line_color="red")
+            st.plotly_chart(fig, use_container_width=True)
+
+            with st.expander("Summary statistics"):
+                st.dataframe(
+                    df["net_worth_diff"]
+                    .describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
+                    .to_frame("Net Worth Difference")
+                    .style.format("${:,.0f}")
                 )
 
-                impacts.append({
-                    "Parameter": label,
-                    "Direction": direction,
-                    "Impact": res.summary["net_worth_diff"] - base_diff,
-                })
+        with tab_sensitivity:
+            st.subheader("Sensitivity Analysis (What Matters Most)")
 
-        impact_df = pd.DataFrame(impacts)
+            base_diff = det_net_worth_diff
 
-        fig = px.bar(
-            impact_df,
-            x="Impact",
-            y="Parameter",
-            color="Direction",
-            orientation="h",
-        )
+            SENS_PARAMS = [
+                ("home_appreciation_rate", "Home appreciation"),
+                ("investment_return", "Investment return"),
+                ("rent_growth_rate", "Rent growth"),
+                ("mortgage_rate", "Mortgage rate"),
+                ("maintenance_pct", "Maintenance cost"),
+            ]
 
-        st.plotly_chart(fig, use_container_width=True)
+            impacts = []
 
-        st.caption(
-            "Each bar shows how changing one assumption at a time affects the final net worth difference. "
-            "Longer bars indicate assumptions that matter more."
-        )
+            for param, label in SENS_PARAMS:
+                base_val = getattr(baseline, param)
+                bump = 0.01 if "rate" in param or "pct" in param else base_val * 0.01
+
+                for direction, sign in [("Down", -1), ("Up", 1)]:
+                    overrides_sens = {param: base_val + sign * bump}
+
+                    res = deterministic_run(
+                        scenario=scenario,
+                        region=region,
+                        overrides=overrides_sens,
+                        horizon=horizon,
+                        rent_basis=rent_basis,
+                        married=married,
+                        sell_at_end=sell_at_end,
+                    )
+
+                    impacts.append({
+                        "Parameter": label,
+                        "Direction": direction,
+                        "Impact": res.summary["net_worth_diff"] - base_diff,
+                    })
+
+            impact_df = pd.DataFrame(impacts)
+
+            fig = px.bar(
+                impact_df,
+                x="Impact",
+                y="Parameter",
+                color="Direction",
+                orientation="h",
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.caption(
+                "Each bar shows how changing one assumption at a time affects the final net worth difference. "
+                "Longer bars indicate assumptions that matter more."
+            )
