@@ -676,30 +676,45 @@ else:
         path_sd_scale=path_sd_scale,
     )
 
-    prob_owner_wins = (df["net_worth_diff"] > 0).mean()
-    median_diff = df["net_worth_diff"].median()
-    p10 = df["net_worth_diff"].quantile(0.10)
-    p90 = df["net_worth_diff"].quantile(0.90)
+    tab_summary, tab_timing, tab_risk, tab_sensitivity = st.tabs([
+        "Summary",
+        "Timing & Probability",
+        "Downside Risk",
+        "Sensitivity",
+    ])
 
-    col1, col2, col3, col4 = st.columns(4)
+    with tab_summary:
+        st.subheader("Monte Carlo Summary")
 
-    col1.metric("Probability Owning Wins", f"{prob_owner_wins:.1%}")
-    col2.metric("Median Advantage", f"${median_diff:,.0f}")
-    col3.metric("10th Percentile", f"${p10:,.0f}")
-    col4.metric("90th Percentile", f"${p90:,.0f}")
+        prob_owner_wins = (df["net_worth_diff"] > 0).mean()
+        median_diff = df["net_worth_diff"].median()
+        p10 = df["net_worth_diff"].quantile(0.10)
+        p90 = df["net_worth_diff"].quantile(0.90)
 
-    st.divider()
+        col1, col2, col3, col4 = st.columns(4)
 
-    st.subheader("Net Worth Difference Distribution")
+        col1.metric("Probability Owning Wins", f"{prob_owner_wins:.1%}")
+        col2.metric("Median Advantage", f"${median_diff:,.0f}")
+        col3.metric("10th Percentile", f"${p10:,.0f}")
+        col4.metric("90th Percentile", f"${p90:,.0f}")
 
-    fig = px.histogram(df, x="net_worth_diff", nbins=80, marginal="box")
-    fig.add_vline(x=0, line_dash="dash", line_color="red")
-    st.plotly_chart(fig, use_container_width=True)
+        with st.expander("Summary statistics"):
+            st.dataframe(
+                df["net_worth_diff"]
+                .describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
+                .to_frame("Net Worth Difference")
+                .style.format("${:,.0f}")
+            )
 
-    with st.expander("Summary statistics"):
-        st.dataframe(
-            df["net_worth_diff"]
-            .describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
-            .to_frame("Net Worth Difference")
-            .style.format("${:,.0f}")
-        )
+    with tab_timing:
+        st.info("Additional timing and probability outputs coming soon.")
+
+    with tab_risk:
+        st.subheader("Distribution of Net Worth Difference")
+
+        fig = px.histogram(df, x="net_worth_diff", nbins=80, marginal="box")
+        fig.add_vline(x=0, line_dash="dash", line_color="red")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab_sensitivity:
+        st.info("Sensitivity analysis coming soon.")
