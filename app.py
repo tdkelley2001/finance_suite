@@ -217,7 +217,11 @@ with st.sidebar:
     )
 
     st.header("Active Assumptions")
-    overrides, assumption_rows, override_count = collect_assumptions(baseline)
+    context_key = f"{scenario}_{region}_{rent_basis}_{married}_{sell_at_end}"
+    overrides, assumption_rows, override_count = collect_assumptions(
+        baseline,
+        context_key=context_key,
+    )
 
     if mode == "Monte Carlo":
         st.divider()
