@@ -3,14 +3,6 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-# Predefined Monte Carlo profiles
-MC_PROFILES = {
-    "Baseline": {"param_sd_scale": 1.0, "path_sd_scale": 1.0},
-    "Conservative": {"param_sd_scale": 0.75, "path_sd_scale": 0.75},
-    "Volatile": {"param_sd_scale": 1.25, "path_sd_scale": 1.25},
-    "Stress": {"param_sd_scale": 1.5, "path_sd_scale": 1.75},
-}
-
 from engine.assumptions import build_assumptions, Assumptions
 from engine.engine import run_engine
 from engine.rate_provider import RatePaths, PathRateProvider, DeterministicRateProvider
