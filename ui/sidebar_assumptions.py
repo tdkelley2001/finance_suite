@@ -5,7 +5,7 @@ from config.param_meta import PARAM_META
 from ui.assumptions_view import values_equal, format_assumption_value
 
 
-def collect_assumptions(baseline) -> tuple[dict, list[dict], int]:
+def collect_assumptions(baseline, *, context_key: str) -> tuple[dict, list[dict], int]:
     overrides = {}
     assumption_rows = []
 
@@ -34,7 +34,7 @@ def collect_assumptions(baseline) -> tuple[dict, list[dict], int]:
                         step=0.1,
                         format="%.2f",
                         help=help_text,
-                        key=f"{param}_input",
+                        key=f"{context_key}_{param}",
                     ) / 100
 
                 elif kind == "currency":
@@ -44,7 +44,7 @@ def collect_assumptions(baseline) -> tuple[dict, list[dict], int]:
                         step=100.0,
                         format="%.0f",
                         help=help_text,
-                        key=f"{param}_input",
+                        key=f"{context_key}_{param}",
                     )
 
                 elif kind == "int":
@@ -53,7 +53,7 @@ def collect_assumptions(baseline) -> tuple[dict, list[dict], int]:
                         value=int(base_val),
                         step=1,
                         help=help_text,
-                        key=f"{param}_input",
+                        key=f"{context_key}_{param}",
                     )
 
                 else:
@@ -68,7 +68,7 @@ def collect_assumptions(baseline) -> tuple[dict, list[dict], int]:
 
                 assumption_rows.append(
                     {
-                        "Group": kind,
+                        "Group": meta["group"],
                         "Parameter": label,
                         "Baseline": format_assumption_value(base_val, kind),
                         "Value": format_assumption_value(ui_val, kind),
