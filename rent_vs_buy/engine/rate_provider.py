@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import Dict, Optional, Sequence
 import numpy as np
-from engine.assumptions import Assumptions
+
+from rent_vs_buy.engine.assumptions import Assumptions
 
 
 @dataclass(frozen=True)

@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 import yaml
 
 
-CONFIG_DIR = Path("config")
+CONFIG_DIR = Path("rent_vs_buy/config")
 
 
 def load_yaml(filename: str) -> Dict[str, Any]:

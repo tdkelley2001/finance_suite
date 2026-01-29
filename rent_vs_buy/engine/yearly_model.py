@@ -1,7 +1,8 @@
 import pandas as pd
-from engine.mortgage import mortgage_schedule
-from engine.rate_provider import DeterministicRateProvider, RateProvider
-from engine.assumptions import Assumptions
+
+from rent_vs_buy.engine.mortgage import mortgage_schedule
+from rent_vs_buy.engine.rate_provider import DeterministicRateProvider, RateProvider
+from rent_vs_buy.engine.assumptions import Assumptions
 
 
 def build_yearly_df(assump: Assumptions, rate_provider: RateProvider = None) -> pd.DataFrame:

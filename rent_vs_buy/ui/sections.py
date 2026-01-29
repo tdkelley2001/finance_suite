@@ -3,8 +3,8 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
-from engine.mortgage import mortgage_schedule
-from samplers.deterministic import deterministic_run
+from rent_vs_buy.engine.mortgage import mortgage_schedule
+from rent_vs_buy.samplers.deterministic import deterministic_run
 
 
 CURRENCY_COLS = {

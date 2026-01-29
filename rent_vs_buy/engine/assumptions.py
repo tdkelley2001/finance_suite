@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
-from config_loader import load_yaml
+from rent_vs_buy.config.config_loader import load_yaml
 
 
 @dataclass

@@ -3,10 +3,10 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from engine.assumptions import build_assumptions, Assumptions
-from engine.engine import run_engine
-from engine.rate_provider import RatePaths, PathRateProvider, DeterministicRateProvider
-from samplers.distributions import NormalDist
+from rent_vs_buy.engine.assumptions import build_assumptions, Assumptions
+from rent_vs_buy.engine.engine import run_engine
+from rent_vs_buy.engine.rate_provider import RatePaths, PathRateProvider
+from rent_vs_buy.samplers.distributions import NormalDist
 
 
 
