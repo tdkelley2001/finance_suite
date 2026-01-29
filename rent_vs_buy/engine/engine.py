@@ -2,9 +2,9 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Optional
 
-from engine.yearly_model import build_yearly_df
-from engine.summary import build_summary
-from engine.rate_provider import RateProvider
+from rent_vs_buy.engine.yearly_model import build_yearly_df
+from rent_vs_buy.engine.summary import build_summary
+from rent_vs_buy.engine.rate_provider import RateProvider
 
 
 @dataclass

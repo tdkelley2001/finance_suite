@@ -1,8 +1,8 @@
 import streamlit as st
 from collections import defaultdict
 
-from config.param_meta import PARAM_META
-from ui.assumptions_view import values_equal, format_assumption_value
+from rent_vs_buy.config.param_meta import PARAM_META
+from rent_vs_buy.ui.assumptions_view import values_equal, format_assumption_value
 
 
 def collect_assumptions(baseline, *, context_key: str) -> tuple[dict, list[dict], int]:

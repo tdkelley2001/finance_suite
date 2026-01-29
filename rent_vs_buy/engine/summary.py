@@ -1,5 +1,6 @@
 import pandas as pd
-from engine.assumptions import Assumptions
+
+from rent_vs_buy.engine.assumptions import Assumptions
 
 
 def build_summary(yearly: pd.DataFrame, assump: Assumptions):

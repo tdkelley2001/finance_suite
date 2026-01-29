@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 
-from ui.run_context import RunContext
-from ui.assumptions_view import highlight_overrides
+from rent_vs_buy.ui.run_context import RunContext
+from rent_vs_buy.ui.assumptions_view import highlight_overrides
 
 
 def render_model_summary(

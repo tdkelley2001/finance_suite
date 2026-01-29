@@ -2,17 +2,17 @@ import streamlit as st
 from typing import Dict, Optional
 import pandas as pd
 
-from samplers.monte_carlo import monte_carlo_run
-from ui.run_context import RunContext
-from config_loader import load_yaml_keys
-from engine.assumptions import build_assumptions
-from ui.sidebar_assumptions import collect_assumptions
-from ui.run_summary import (
+from rent_vs_buy.samplers.monte_carlo import monte_carlo_run
+from rent_vs_buy.ui.run_context import RunContext
+from rent_vs_buy.config.config_loader import load_yaml_keys
+from rent_vs_buy.engine.assumptions import build_assumptions
+from rent_vs_buy.ui.sidebar_assumptions import collect_assumptions
+from rent_vs_buy.ui.run_summary import (
     render_model_summary,
     render_assumption_summary,
 )
-from samplers.deterministic import deterministic_run
-from ui.sections import (
+from rent_vs_buy.samplers.deterministic import deterministic_run
+from rent_vs_buy.ui.sections import (
     render_net_worth_section,
     render_cashflow_section,
     render_starting_position,
@@ -22,7 +22,7 @@ from ui.sections import (
     render_mc_risk,
     render_mc_sensitivity
 )
-from ui.mc_metrics import summarize_net_worth_diff
+from rent_vs_buy.ui.mc_metrics import summarize_net_worth_diff
 
 
 RENT_BASIS_OPTIONS = {
