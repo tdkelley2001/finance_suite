@@ -232,7 +232,7 @@ budget/
 
 templates/
   budget_template.csv
-
+```
 
 ## Intended Role in Money Lab
 
