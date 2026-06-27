@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -309,14 +307,13 @@ def update_tool_output(tool_key: str, summary: dict[str, Any]) -> None:
     set_user_state(state)
 
 
-def to_json(state: UserState | None = None) -> str:
+def state_to_dict(state: UserState | None = None) -> dict[str, Any]:
     state = state or get_user_state()
     state.updated_at = _timestamp()
-    return json.dumps(_json_safe(asdict(state)), indent=2)
+    return _json_safe(asdict(state))
 
 
-def from_json(raw_json: str) -> UserState:
-    data = json.loads(raw_json)
+def state_from_dict(data: dict[str, Any]) -> UserState:
     state = UserState(
         updated_at=str(data.get("updated_at") or _timestamp()),
         profile=_profile_from_dict(data.get("profile") or {}),
@@ -332,43 +329,8 @@ def dataframe_to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
     return _json_safe(df.to_dict(orient="records"))
 
 
-def records_to_dataframe(records: list[dict[str, Any]]) -> pd.DataFrame:
+def _records_to_dataframe(records: list[dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(records)
-
-
-def render_state_import() -> None:
-    with st.sidebar.expander("Save / Load State", expanded=False):
-        uploaded = st.file_uploader(
-            "Load Money Lab JSON",
-            type=["json"],
-            key="suite_state_upload",
-        )
-        if uploaded is not None:
-            raw_bytes = uploaded.getvalue()
-            fingerprint = hashlib.sha256(raw_bytes).hexdigest()
-            if st.session_state.get("suite_loaded_state_fingerprint") == fingerprint:
-                st.caption("Loaded file is already applied.")
-                return
-
-            try:
-                loaded_state = from_json(raw_bytes.decode("utf-8"))
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                st.error(f"Could not load state: {exc}")
-            else:
-                set_user_state(loaded_state)
-                _hydrate_widgets_from_state(loaded_state)
-                st.session_state["suite_loaded_state_fingerprint"] = fingerprint
-                st.success("State loaded.")
-
-
-def render_state_export() -> None:
-    with st.sidebar.expander("Export Current State", expanded=False):
-        st.download_button(
-            "Download Money Lab JSON",
-            to_json(),
-            file_name="money_lab_state.json",
-            mime="application/json",
-        )
 
 
 def render_state_sources() -> None:
@@ -383,7 +345,7 @@ def render_state_sources() -> None:
             st.caption(f"{label}: {source_label}")
 
 
-def _hydrate_widgets_from_state(state: UserState) -> None:
+def hydrate_widgets_from_state(state: UserState) -> None:
     cash_flow = state.profile.monthly_cash_flow
     st.session_state["budget_net_monthly_income"] = cash_flow.net_monthly_income
     st.session_state["budget_planned_savings"] = cash_flow.planned_monthly_savings
@@ -396,7 +358,7 @@ def _hydrate_widgets_from_state(state: UserState) -> None:
     budget_state = _tool_state_from_state(state, "budget")
     expense_records = budget_state.get("expenses")
     if isinstance(expense_records, list):
-        st.session_state["expenses_df"] = records_to_dataframe(expense_records)
+        st.session_state["expenses_df"] = _records_to_dataframe(expense_records)
 
     housing_state = _tool_state_from_state(state, "housing_affordability")
     for key, value in housing_state.items():
@@ -412,7 +374,7 @@ def _tool_state_from_state(state: UserState, tool_key: str) -> dict[str, Any]:
 
 def _coerce_state(value: Any) -> UserState:
     if isinstance(value, dict):
-        return from_json(json.dumps(_json_safe(value)))
+        return state_from_dict(_json_safe(value))
 
     if hasattr(value, "profile"):
         return value
