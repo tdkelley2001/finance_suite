@@ -2,6 +2,9 @@ import streamlit as st
 from typing import Dict, Optional
 import pandas as pd
 
+from suite.state import get_user_state
+from suite.tools import SuiteTool
+from suite.ui import render_tool_header
 from rent_vs_buy.samplers.monte_carlo import monte_carlo_run
 from rent_vs_buy.ui.run_context import RunContext
 from rent_vs_buy.config.config_loader import load_yaml_keys
@@ -54,18 +57,26 @@ MC_PROFILES = {
     },
 }
 
+RENT_VS_BUY_ASSUMPTION_MAP = {
+    "inflation": "inflation",
+    "expected_portfolio_return": "investment_return",
+    "mortgage_rate": "mortgage_rate",
+    "property_tax_rate": "property_tax_pct",
+    "homeowners_insurance_annual": "homeowners_insurance_annual",
+    "pmi_rate": "pmi_rate",
+    "home_appreciation": "home_appreciation_rate",
+    "rent_growth": "rent_growth_rate",
+    "capital_gains_tax_rate": "capital_gains_tax_rate",
+}
 
-def render_rent_vs_buy():
+
+def render_rent_vs_buy(tool: SuiteTool) -> None:
     # ==================================================
     # Page config
     # ==================================================
-    st.header("🏠 Rent vs Buy Model")
-    st.caption("Analysis of long-run net worth")
-    st.warning(
-        "This tool is for educational and exploratory purposes only. "
-        "It is not financial advice or a recommendation. "
-        "Results are highly assumption-dependent and represent hypothetical outcomes, not predictions."
-    )
+    render_tool_header(tool)
+    suite_assumptions = get_user_state().assumptions.global_defaults
+    suite_overrides = _suite_assumption_overrides()
 
 
     # ==================================================
@@ -143,7 +154,7 @@ def render_rent_vs_buy():
             "Horizon (years)",
             min_value=1,
             max_value=50,
-            value=30,
+            value=int(suite_assumptions.get("planning_horizon_years", 30)),
             step=1,
             help="Length of time the rent vs buy decision is evaluated",
         )
@@ -191,7 +202,7 @@ def render_rent_vs_buy():
         baseline = build_assumptions(
             scenario=scenario,
             region=region,
-            overrides=None,
+            overrides=suite_overrides,
             horizon=horizon,
             rent_basis=rent_basis,
             married=married,
@@ -204,6 +215,7 @@ def render_rent_vs_buy():
             baseline,
             context_key=context_key,
         )
+        model_overrides = _merge_overrides(suite_overrides, overrides)
 
         if include_uncertainty:
             st.divider()
@@ -301,7 +313,7 @@ def render_rent_vs_buy():
     # ======================================================
     # Model Run
     # ======================================================
-    baseline_result = run_deterministic_cached(context, overrides)
+    baseline_result = run_deterministic_cached(context, model_overrides)
 
     yearly = baseline_result.yearly
     summary = baseline_result.summary
@@ -342,7 +354,7 @@ def render_rent_vs_buy():
         with st.spinner("Running simulation..."):
             df, yearly_list = run_mc_cached(
                 context=context,
-                overrides=overrides,
+                overrides=model_overrides,
                 n_sims=n_sims,
                 seed=seed,
                 mc_profile=mc_profile,
@@ -392,3 +404,20 @@ def render_rent_vs_buy():
 
             with tab_sensitivity:
                 render_mc_sensitivity(baseline, det_net_worth_diff, context)
+
+
+def _suite_assumption_overrides() -> Dict:
+    assumptions = get_user_state().assumptions.global_defaults
+    return {
+        model_key: assumptions[suite_key]
+        for suite_key, model_key in RENT_VS_BUY_ASSUMPTION_MAP.items()
+        if suite_key in assumptions
+    }
+
+
+def _merge_overrides(*overrides: Optional[Dict]) -> Dict:
+    merged = {}
+    for override in overrides:
+        if override:
+            merged.update(override)
+    return merged

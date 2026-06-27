@@ -5,13 +5,36 @@ __pycache__/
 *.pyd
 *.so
 
-# Virtual environment
+# Virtual environments
+.venv/
 venv/
-.env/
+env/
+
+# Local environment and secrets
 .env
+.env.*
+*.env
+!.env.example
+!.env.sample
+.streamlit/secrets.toml
+.streamlit/secrets*.toml
+secrets/
+*.pem
+*.key
+
+# Local app state, exports, and user storage
+money_lab_state.json
+*_state.json
+state/
+states/
+storage/
+instance/
+*.db
+*.sqlite
+*.sqlite3
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
-# VSCode
+# Editor settings
 .vscode/

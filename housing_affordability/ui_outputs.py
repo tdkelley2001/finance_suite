@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from suite.ui import flatten_assumptions, money
 
 
 CONSTRAINT_EXPLANATIONS = {
@@ -23,9 +24,9 @@ def render_summary(result, total_cash_required, status):
     st.subheader("Affordability Summary")
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Home Price", f"${result.max_home_price:,.0f}")
-    c2.metric("Monthly Housing Cost", f"${result.monthly_cost.total:,.0f}")
-    c3.metric("Cash Required", f"${total_cash_required:,.0f}")
+    c1.metric("Home Price", money(result.max_home_price))
+    c2.metric("Monthly Housing Cost", money(result.monthly_cost.total))
+    c3.metric("Cash Required", money(total_cash_required))
 
     c4, c5 = st.columns(2)
     c4.metric("Status", status)
@@ -87,25 +88,5 @@ def render_details(monthly_cost, cash_breakdown, assumptions_dict):
         )
 
     with tabs[3]:
-        rows = []
-        for section, params in assumptions_dict.items():
-            if isinstance(params, dict):
-                for k, v in params.items():
-                    rows.append(
-                        {
-                            "Category": section.title(),
-                            "Parameter": k.replace("_", " ").title(),
-                            "Value": v,
-                        }
-                    )
-            else:
-                rows.append(
-                    {
-                        "Category": "Mode",
-                        "Parameter": section,
-                        "Value": params,
-                    }
-                )
-
-        assumptions_df = pd.DataFrame(rows)
+        assumptions_df = pd.DataFrame(flatten_assumptions(assumptions_dict))
         st.dataframe(assumptions_df, use_container_width=True)

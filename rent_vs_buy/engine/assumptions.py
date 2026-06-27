@@ -114,7 +114,7 @@ def build_assumptions(
         property_tax_pct=float(params["property_tax_pct"]),
         married=bool(married),
         capital_gains_exclusion_single=float(globals_["capital_gains_exclusion_single"]),
-        capital_gains_tax_rate=float(globals_["capital_gains_tax_rate"]),
+        capital_gains_tax_rate=float(params["capital_gains_tax_rate"]),
         capital_gains_exclusion=float(cap_excl),
         investment_tax_drag=float(params["investment_tax_drag"]),
     )
