@@ -3,9 +3,6 @@ from typing import List, Optional
 from datetime import datetime
 
 
-SCHEMA_VERSION = 1
-
-
 @dataclass
 class SavingsItem:
     name: str
@@ -14,7 +11,7 @@ class SavingsItem:
 
 @dataclass
 class BudgetAssumptions:
-    net_monthly_income: float
+    net_monthly_income: float = 0.0
     savings: List[SavingsItem] = field(default_factory=list)
 
 
@@ -37,7 +34,6 @@ class BudgetMetadata:
 
 @dataclass
 class BudgetProfile:
-    schema_version: int = SCHEMA_VERSION
     metadata: BudgetMetadata = field(default_factory=BudgetMetadata)
     assumptions: BudgetAssumptions = field(default_factory=BudgetAssumptions)
     expenses: List[BudgetExpense] = field(default_factory=list)

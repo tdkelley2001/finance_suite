@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import math
 
 from budget.defaults import get_default_expenses_df
 from budget.engine import calculate_budget_summary
@@ -11,20 +10,16 @@ from budget.models import (
     SavingsItem,
 )
 from budget.io import budget_to_dataframe
-
-
-# ======================================================
-# Helpers
-# ======================================================
-def safe_float(val) -> float:
-    if val is None:
-        return 0.0
-    try:
-        if isinstance(val, float) and math.isnan(val):
-            return 0.0
-        return float(val)
-    except (TypeError, ValueError):
-        return 0.0
+from suite.tools import SuiteTool
+from suite.state import (
+    SharedCashFlowState,
+    dataframe_to_records,
+    get_user_state,
+    update_cash_flow,
+    update_tool_output,
+    update_tool_state,
+)
+from suite.ui import money, read_package_text, render_tool_header, safe_float
 
 
 def build_budget_profile(
@@ -58,19 +53,18 @@ def build_budget_profile(
 # ======================================================
 # Main UI
 # ======================================================
-def render_budget():
+def render_budget(tool: SuiteTool) -> None:
     # ----------------------------------
     # Page header
     # ----------------------------------
-    st.header("💰 Monthly Budget")
-    st.caption("A simple, editable view of your monthly cash flow")
+    render_tool_header(tool)
+    shared_cash_flow = get_user_state().cash_flow
 
-    with open("budget/templates/budget_template.csv", "r") as f:
-        st.download_button(
-            "Download blank budget template",
-            f.read(),
-            file_name="budget_template.csv",
-        )
+    st.download_button(
+        "Download blank budget template",
+        read_package_text("budget", "templates/budget_template.csv"),
+        file_name="budget_template.csv",
+    )
     
     st.divider()
 
@@ -83,17 +77,19 @@ def render_budget():
         net_monthly_income = st.number_input(
             "Net monthly income",
             min_value=0.0,
-            value=0.0,
+            value=shared_cash_flow.net_monthly_income,
             step=100.0,
+            key="budget_net_monthly_income",
         )
 
     with col2:
         planned_savings = st.number_input(
             "Planned monthly savings",
             min_value=0.0,
-            value=0.0,
+            value=shared_cash_flow.planned_monthly_savings,
             step=100.0,
             help="Retirement contributions, brokerage transfers, etc.",
+            key="budget_planned_savings",
         )
 
     st.divider()
@@ -103,7 +99,7 @@ def render_budget():
     # ----------------------------------
     st.caption(
         "This starter list includes common expense categories. "
-        "Fill in what applies to you, leave blank or remove rows you don’t need, and add any additional rows you need."
+        "Fill in what applies to you, leave blank or remove rows you do not need, and add any additional rows you need."
     )
     if "expenses_df" not in st.session_state:
         st.session_state.expenses_df = get_default_expenses_df()
@@ -137,6 +133,35 @@ def render_budget():
     # Run engine
     # ----------------------------------
     summary = calculate_budget_summary(profile)
+    update_cash_flow(
+        SharedCashFlowState(
+            net_monthly_income=summary.net_monthly_income,
+            required_monthly_expenses=summary.required_expenses,
+            discretionary_monthly_expenses=summary.discretionary_expenses,
+            planned_monthly_savings=summary.total_savings,
+            savings_rate=summary.savings_rate,
+            emergency_expense_baseline=summary.emergency_expense_baseline,
+            min_monthly_buffer=shared_cash_flow.min_monthly_buffer,
+            source="budget",
+        )
+    )
+    update_tool_state(
+        "budget",
+        {"expenses": dataframe_to_records(expenses_df)},
+    )
+    update_tool_output(
+        "budget",
+        {
+            "net_monthly_income": summary.net_monthly_income,
+            "total_savings": summary.total_savings,
+            "savings_rate": summary.savings_rate,
+            "total_expenses": summary.total_expenses,
+            "required_expenses": summary.required_expenses,
+            "discretionary_expenses": summary.discretionary_expenses,
+            "emergency_expense_baseline": summary.emergency_expense_baseline,
+            "buffer": summary.buffer,
+        },
+    )
 
     # -----------------------------
     # Outputs
@@ -145,10 +170,10 @@ def render_budget():
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Total expenses", f"${summary.total_expenses:,.0f}")
-    c2.metric("Required", f"${summary.required_expenses:,.0f}")
-    c3.metric("Discretionary", f"${summary.discretionary_expenses:,.0f}")
-    c4.metric("Remaining buffer", f"${summary.buffer:,.0f}")
+    c1.metric("Total expenses", money(summary.total_expenses))
+    c2.metric("Required", money(summary.required_expenses))
+    c3.metric("Discretionary", money(summary.discretionary_expenses))
+    c4.metric("Remaining buffer", money(summary.buffer))
 
     st.caption(
         "The remaining buffer represents income left after planned savings and expenses."

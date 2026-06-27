@@ -1,0 +1,2 @@
+"""Net worth tracker tool."""
+

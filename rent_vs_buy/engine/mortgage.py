@@ -1,4 +1,5 @@
 import pandas as pd
+from suite.calculations import amortization_schedule, fixed_payment
 
 
 def mortgage_schedule(assump):
@@ -9,35 +10,17 @@ def mortgage_schedule(assump):
       loan_amount: original loan amount
     """
     loan_amount = assump.home_price * (1 - assump.down_payment_pct)
-    r = assump.mortgage_rate / 12
-    n = assump.mortgage_term * 12
 
-    if r == 0:
-        pmt = loan_amount / n
-    else:
-        pmt = loan_amount * r / (1 - (1 + r) ** -n)
+    schedule = amortization_schedule(
+        principal=loan_amount,
+        annual_rate=assump.mortgage_rate,
+        term_years=assump.mortgage_term,
+        horizon_years=assump.horizon,
+    ).rename(columns={"balance": "mortgage_balance"})
+    monthly_payment = fixed_payment(
+        loan_amount,
+        assump.mortgage_rate,
+        assump.mortgage_term,
+    )
 
-    balance = loan_amount
-    rows = []
-
-    for year in range(1, assump.horizon + 1):
-        interest = 0
-        principal = 0
-
-        for _ in range(12):
-            i = balance * r
-            p = pmt - i
-            balance -= p
-            interest += i
-            principal += p
-
-        rows.append(
-            {
-                "year": year,
-                "mortgage_balance": balance,
-                "principal_paid": principal,
-                "interest_paid": interest,
-            }
-        )
-
-    return pd.DataFrame(rows), pmt * 12, loan_amount
+    return pd.DataFrame(schedule), monthly_payment * 12, loan_amount

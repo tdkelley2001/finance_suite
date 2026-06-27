@@ -6,6 +6,11 @@ from .models import (
     MonthlyHousingCost,
     AffordabilityResult,
 )
+from suite.calculations import (
+    cash_required,
+    constrained_payment_limit,
+    fixed_payment,
+)
 
 
 def monthly_mortgage_payment(
@@ -13,13 +18,7 @@ def monthly_mortgage_payment(
     annual_rate: float,
     term_years: int,
 ) -> float:
-    if loan_amount <= 0:
-        return 0.0
-
-    r = annual_rate / 12
-    n = term_years * 12
-
-    return loan_amount * (r * (1 + r) ** n) / ((1 + r) ** n - 1)
+    return fixed_payment(loan_amount, annual_rate, term_years)
 
 
 def housing_cost_from_price(
@@ -57,24 +56,25 @@ def max_payment_from_constraints(
     household: Household,
     constraints: AffordabilityConstraints,
 ) -> float:
-    payment_limit_income = household.net_monthly_income * constraints.max_payment_ratio
-    payment_limit_buffer = (
-        household.net_monthly_income
-        - household.non_housing_expenses
-        - household.planned_savings
-        - household.min_monthly_buffer
+    return constrained_payment_limit(
+        income=household.net_monthly_income,
+        payment_ratio=constraints.max_payment_ratio,
+        non_payment_expenses=household.non_housing_expenses,
+        planned_savings=household.planned_savings,
+        minimum_buffer=household.min_monthly_buffer,
     )
-
-    return min(payment_limit_income, payment_limit_buffer)
 
 
 def cash_required_for_price(
     home_price: float,
     cash: CashPosition,
 ) -> float:
-    down_payment = home_price * cash.down_payment_pct
-    closing_costs = home_price * cash.closing_cost_pct
-    return down_payment + closing_costs + cash.reserve_requirement
+    return cash_required(
+        amount=home_price,
+        upfront_pct=cash.down_payment_pct,
+        transaction_cost_pct=cash.closing_cost_pct,
+        reserves=cash.reserve_requirement,
+    )
 
 
 def solve_max_affordable_price(

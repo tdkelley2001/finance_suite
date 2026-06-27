@@ -1,6 +1,7 @@
 import pandas as pd
 
 from rent_vs_buy.engine.assumptions import Assumptions
+from suite.calculations import compound_value
 
 
 def build_summary(yearly: pd.DataFrame, assump: Assumptions):
@@ -28,9 +29,10 @@ def build_summary(yearly: pd.DataFrame, assump: Assumptions):
 
     # Opportunity cost of down payment using realized investment path
     dp_amount = assump.home_price * assump.down_payment_pct
-    dp_growth = dp_amount
-    for r in yearly["investment_return_after_tax"].values:
-        dp_growth *= (1 + float(r))
+    dp_growth = compound_value(
+        dp_amount,
+        yearly["investment_return_after_tax"].values,
+    )
     opportunity_cost = dp_growth - dp_amount
 
     # Waterfall based on economic costs, not cash outflow

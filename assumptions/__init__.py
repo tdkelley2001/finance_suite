@@ -1,0 +1,2 @@
+"""Suite-wide assumptions manager."""
+
