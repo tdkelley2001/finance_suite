@@ -91,6 +91,21 @@ def save_profile() -> Any:
     )
 
 
+def render_profile_save_controls() -> None:
+    with st.sidebar.expander("Profile Storage", expanded=False):
+        if is_dev_auth_bypass_active():
+            st.caption("Dev auth bypass is active. Supabase save is disabled.")
+            return
+
+        if st.button("Save profile", use_container_width=True):
+            try:
+                save_profile()
+            except Exception as exc:
+                st.error(f"Could not save profile: {exc}")
+            else:
+                st.success("Profile saved.")
+
+
 def _require_user() -> Any:
     user = get_current_user()
     if user is None:

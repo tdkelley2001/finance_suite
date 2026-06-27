@@ -106,17 +106,27 @@ def render_budget(tool: SuiteTool) -> None:
 
     st.subheader("Monthly Expenses")
 
-    expenses_df = st.data_editor(
-        st.session_state.expenses_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        column_config={
-            "Monthly Amount": st.column_config.NumberColumn(format="$%.2f"),
-            "Required": st.column_config.CheckboxColumn(),
-        },
-    )
+    with st.form("budget_expenses_form"):
+        edited_expenses_df = st.data_editor(
+            st.session_state.expenses_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "Monthly Amount": st.column_config.NumberColumn(format="$%.2f"),
+                "Required": st.column_config.CheckboxColumn(),
+            },
+            key="budget_expenses_editor",
+        )
+        apply_expenses = st.form_submit_button(
+            "Apply expenses",
+            use_container_width=True,
+        )
 
-    st.session_state.expenses_df = expenses_df
+    if apply_expenses:
+        st.session_state.expenses_df = edited_expenses_df
+        st.success("Expenses applied.")
+
+    expenses_df = st.session_state.expenses_df
 
     st.divider()
 

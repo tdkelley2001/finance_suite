@@ -149,6 +149,14 @@ def logout() -> None:
         PROFILE_LOADED_KEY,
         DEV_AUTH_KEY,
         STATE_KEY,
+        "expenses_df",
+        "budget_expenses_editor",
+        "net_worth_accounts_df",
+        "net_worth_assets_df",
+        "net_worth_liabilities_df",
+        "net_worth_accounts_editor",
+        "net_worth_assets_editor",
+        "net_worth_liabilities_editor",
     ):
         st.session_state.pop(key, None)
     clear_supabase_client()

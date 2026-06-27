@@ -70,92 +70,130 @@ def render_net_worth(tool: SuiteTool) -> None:
     render_tool_header(tool)
 
     profile = get_user_state().profile
-    accounts_df = _accounts_to_dataframe(profile.accounts)
-    assets_df = _assets_to_dataframe(profile.assets)
-    liabilities_df = _liabilities_to_dataframe(profile.liabilities)
+    accounts_df = _session_dataframe(
+        "net_worth_accounts_df",
+        _accounts_to_dataframe(profile.accounts),
+    )
+    assets_df = _session_dataframe(
+        "net_worth_assets_df",
+        _assets_to_dataframe(profile.assets),
+    )
+    liabilities_df = _session_dataframe(
+        "net_worth_liabilities_df",
+        _liabilities_to_dataframe(profile.liabilities),
+    )
 
     tab_accounts, tab_assets, tab_liabilities = st.tabs(
         ["Accounts", "Other Assets", "Liabilities"]
     )
 
     with tab_accounts:
-        edited_accounts = st.data_editor(
-            accounts_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            column_config={
-                "Account Type": st.column_config.SelectboxColumn(
-                    options=ACCOUNT_TYPES
-                ),
-                "Tax Treatment": st.column_config.SelectboxColumn(
-                    options=TAX_TREATMENTS,
-                    help="Defaults from account type; edit if your account is different.",
-                ),
-                "Balance": st.column_config.NumberColumn(format="$%.2f"),
-            },
-            key="net_worth_accounts",
-        )
+        with st.form("net_worth_accounts_form"):
+            edited_accounts = st.data_editor(
+                accounts_df,
+                num_rows="dynamic",
+                use_container_width=True,
+                column_config={
+                    "Account Type": st.column_config.SelectboxColumn(
+                        options=ACCOUNT_TYPES
+                    ),
+                    "Tax Treatment": st.column_config.SelectboxColumn(
+                        options=TAX_TREATMENTS,
+                        help="Defaults from account type; edit if your account is different.",
+                    ),
+                    "Balance": st.column_config.NumberColumn(format="$%.2f"),
+                },
+                key="net_worth_accounts_editor",
+            )
+            apply_accounts = st.form_submit_button(
+                "Apply accounts",
+                use_container_width=True,
+            )
+        if apply_accounts:
+            st.session_state["net_worth_accounts_df"] = edited_accounts
+            st.success("Accounts applied.")
 
     with tab_assets:
-        edited_assets = st.data_editor(
-            assets_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            column_config={
-                "Asset Type": st.column_config.SelectboxColumn(
-                    options=ASSET_TYPES
-                ),
-                "Value": st.column_config.NumberColumn(format="$%.2f"),
-            },
-            key="net_worth_assets",
-        )
+        with st.form("net_worth_assets_form"):
+            edited_assets = st.data_editor(
+                assets_df,
+                num_rows="dynamic",
+                use_container_width=True,
+                column_config={
+                    "Asset Type": st.column_config.SelectboxColumn(
+                        options=ASSET_TYPES
+                    ),
+                    "Value": st.column_config.NumberColumn(format="$%.2f"),
+                },
+                key="net_worth_assets_editor",
+            )
+            apply_assets = st.form_submit_button(
+                "Apply assets",
+                use_container_width=True,
+            )
+        if apply_assets:
+            st.session_state["net_worth_assets_df"] = edited_assets
+            st.success("Assets applied.")
 
     with tab_liabilities:
-        edited_liabilities = st.data_editor(
-            liabilities_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            column_config={
-                "Liability Type": st.column_config.SelectboxColumn(
-                    options=LIABILITY_TYPES
-                ),
-                "Balance": st.column_config.NumberColumn(format="$%.2f"),
-                "Monthly Payment": st.column_config.NumberColumn(format="$%.2f"),
-                "Interest Rate": st.column_config.NumberColumn(format="%.2f%%"),
-            },
-            key="net_worth_liabilities",
-        )
+        with st.form("net_worth_liabilities_form"):
+            edited_liabilities = st.data_editor(
+                liabilities_df,
+                num_rows="dynamic",
+                use_container_width=True,
+                column_config={
+                    "Liability Type": st.column_config.SelectboxColumn(
+                        options=LIABILITY_TYPES
+                    ),
+                    "Balance": st.column_config.NumberColumn(format="$%.2f"),
+                    "Monthly Payment": st.column_config.NumberColumn(format="$%.2f"),
+                    "Interest Rate": st.column_config.NumberColumn(format="%.2f%%"),
+                },
+                key="net_worth_liabilities_editor",
+            )
+            apply_liabilities = st.form_submit_button(
+                "Apply liabilities",
+                use_container_width=True,
+            )
+        if apply_liabilities:
+            st.session_state["net_worth_liabilities_df"] = edited_liabilities
+            st.success("Liabilities applied.")
 
-    accounts = _accounts_from_dataframe(edited_accounts)
-    assets = _assets_from_dataframe(edited_assets)
-    liabilities = _liabilities_from_dataframe(edited_liabilities)
+    applied_accounts_df = st.session_state["net_worth_accounts_df"]
+    applied_assets_df = st.session_state["net_worth_assets_df"]
+    applied_liabilities_df = st.session_state["net_worth_liabilities_df"]
+
+    accounts = _accounts_from_dataframe(applied_accounts_df)
+    assets = _assets_from_dataframe(applied_assets_df)
+    liabilities = _liabilities_from_dataframe(applied_liabilities_df)
     balance_sheet = calculate_balance_sheet(accounts, assets, liabilities)
 
-    update_net_worth_profile(
-        accounts=accounts,
-        assets=assets,
-        liabilities=liabilities,
-        balance_sheet=balance_sheet,
-    )
-    update_tool_state(
-        "net_worth",
-        {
-            "accounts": dataframe_to_records(edited_accounts),
-            "assets": dataframe_to_records(edited_assets),
-            "liabilities": dataframe_to_records(edited_liabilities),
-        },
-    )
-    update_tool_output(
-        "net_worth",
-        {
-            "total_assets": balance_sheet.total_assets,
-            "total_liabilities": balance_sheet.total_liabilities,
-            "net_worth": balance_sheet.net_worth,
-            "liquid_assets": balance_sheet.liquid_assets,
-            "retirement_assets": balance_sheet.retirement_assets,
-            "taxable_assets": balance_sheet.taxable_assets,
-        },
-    )
+    if apply_accounts or apply_assets or apply_liabilities:
+        update_net_worth_profile(
+            accounts=accounts,
+            assets=assets,
+            liabilities=liabilities,
+            balance_sheet=balance_sheet,
+        )
+        update_tool_state(
+            "net_worth",
+            {
+                "accounts": dataframe_to_records(applied_accounts_df),
+                "assets": dataframe_to_records(applied_assets_df),
+                "liabilities": dataframe_to_records(applied_liabilities_df),
+            },
+        )
+        update_tool_output(
+            "net_worth",
+            {
+                "total_assets": balance_sheet.total_assets,
+                "total_liabilities": balance_sheet.total_liabilities,
+                "net_worth": balance_sheet.net_worth,
+                "liquid_assets": balance_sheet.liquid_assets,
+                "retirement_assets": balance_sheet.retirement_assets,
+                "taxable_assets": balance_sheet.taxable_assets,
+            },
+        )
 
     st.subheader("Net Worth Snapshot")
     c1, c2, c3 = st.columns(3)
@@ -167,6 +205,12 @@ def render_net_worth(tool: SuiteTool) -> None:
     c4.metric("Liquid Assets", money(balance_sheet.liquid_assets))
     c5.metric("Retirement Assets", money(balance_sheet.retirement_assets))
     c6.metric("Taxable Assets", money(balance_sheet.taxable_assets))
+
+
+def _session_dataframe(key: str, default: pd.DataFrame) -> pd.DataFrame:
+    if key not in st.session_state:
+        st.session_state[key] = default
+    return st.session_state[key]
 
 
 def _accounts_to_dataframe(accounts: list[FinancialAccount]) -> pd.DataFrame:

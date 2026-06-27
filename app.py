@@ -3,7 +3,7 @@ import streamlit as st
 from suite.auth import render_account_controls, render_auth_gate
 from suite.profile_storage import (
     ensure_profile_loaded,
-    save_profile,
+    render_profile_save_controls,
 )
 from suite.registry import TOOLS
 from suite.state import render_state_sources
@@ -20,13 +20,10 @@ def main() -> None:
 
     render_suite_header()
     render_account_controls()
+    render_profile_save_controls()
 
     tool = select_tool(TOOLS)
     tool.render(tool)
-    try:
-        save_profile()
-    except Exception as exc:
-        st.sidebar.error(f"Could not save profile: {exc}")
     render_state_sources()
 
 
