@@ -4,7 +4,11 @@ from typing import Any
 
 import streamlit as st
 
-from suite.auth import PROFILE_LOADED_KEY, get_current_user
+from suite.auth import (
+    PROFILE_LOADED_KEY,
+    get_current_user,
+    is_dev_auth_bypass_active,
+)
 from suite.state import (
     hydrate_widgets_from_state,
     set_user_state,
@@ -20,6 +24,9 @@ SCHEMA_VERSION = 1
 
 def ensure_profile_loaded() -> bool:
     """Load the signed-in user's saved profile exactly once per session."""
+    if is_dev_auth_bypass_active():
+        return False
+
     user = get_current_user()
     if user is None:
         return False
@@ -34,6 +41,9 @@ def ensure_profile_loaded() -> bool:
 
 
 def load_profile() -> bool:
+    if is_dev_auth_bypass_active():
+        return False
+
     user = _require_user()
     response = (
         get_supabase()
@@ -59,6 +69,9 @@ def load_profile() -> bool:
 
 
 def save_profile() -> Any:
+    if is_dev_auth_bypass_active():
+        return None
+
     user = _require_user()
     state_dict = state_to_dict()
 
