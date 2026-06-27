@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import time
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -21,11 +22,15 @@ from suite.supabase_client import (
 SESSION_KEY = "supabase_session"
 USER_KEY = "supabase_user"
 PROFILE_LOADED_KEY = "profile_loaded_for_user"
+DEV_AUTH_KEY = "dev_auth_bypass"
 OAUTH_STATE_MAX_AGE_SECONDS = 15 * 60
 
 
 def render_auth_gate() -> Any:
     """Render login/signup UI and stop the app until a user is authenticated."""
+    if _dev_auth_bypass_enabled():
+        return _ensure_dev_auth_session()
+
     try:
         supabase = get_supabase()
     except SupabaseConfigError as exc:
@@ -111,6 +116,8 @@ def render_account_controls() -> None:
         return
 
     with st.sidebar.expander("Account", expanded=False):
+        if is_dev_auth_bypass_active():
+            st.warning("Dev auth bypass is active.")
         st.caption(getattr(user, "email", "") or getattr(user, "id", "Signed in"))
         if st.button("Log out", use_container_width=True):
             logout()
@@ -124,16 +131,22 @@ def get_current_user() -> Any | None:
     return st.session_state.get(USER_KEY)
 
 
+def is_dev_auth_bypass_active() -> bool:
+    return bool(st.session_state.get(DEV_AUTH_KEY))
+
+
 def logout() -> None:
-    try:
-        get_supabase().auth.sign_out()
-    except Exception:
-        pass
+    if not is_dev_auth_bypass_active():
+        try:
+            get_supabase().auth.sign_out()
+        except Exception:
+            pass
 
     for key in (
         SESSION_KEY,
         USER_KEY,
         PROFILE_LOADED_KEY,
+        DEV_AUTH_KEY,
         STATE_KEY,
     ):
         st.session_state.pop(key, None)
@@ -151,6 +164,53 @@ def _store_auth_response(response: Any) -> bool:
     st.session_state[SESSION_KEY] = session
     st.session_state[USER_KEY] = user
     return True
+
+
+def _ensure_dev_auth_session() -> Any:
+    if not is_dev_auth_bypass_active():
+        user = SimpleNamespace(
+            id=_dev_auth_secret("user_id", "dev-user"),
+            email=_dev_auth_secret("email", "dev@example.local"),
+        )
+        session = SimpleNamespace(
+            access_token="dev-auth-bypass",
+            refresh_token="dev-auth-bypass",
+            user=user,
+        )
+        st.session_state[SESSION_KEY] = session
+        st.session_state[USER_KEY] = user
+        st.session_state[DEV_AUTH_KEY] = True
+    return st.session_state[SESSION_KEY]
+
+
+def _dev_auth_bypass_enabled() -> bool:
+    if not _dev_auth_secret_bool("enabled", False):
+        return False
+
+    if _dev_auth_secret_bool("allow_non_localhost", False):
+        return True
+
+    hostname = urlsplit(str(getattr(st.context, "url", "") or "")).hostname
+    return hostname in {None, "", "localhost", "127.0.0.1", "::1"}
+
+
+def _dev_auth_secret(name: str, default: str) -> str:
+    try:
+        value = str(st.secrets["auth"]["dev_bypass"][name]).strip()
+    except (KeyError, TypeError):
+        return default
+    return value or default
+
+
+def _dev_auth_secret_bool(name: str, default: bool) -> bool:
+    try:
+        value = st.secrets["auth"]["dev_bypass"][name]
+    except (KeyError, TypeError):
+        return default
+
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _handle_oauth_callback(supabase: Any) -> None:
