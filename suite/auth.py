@@ -23,6 +23,7 @@ SESSION_KEY = "supabase_session"
 USER_KEY = "supabase_user"
 PROFILE_LOADED_KEY = "profile_loaded_for_user"
 DEV_AUTH_KEY = "dev_auth_bypass"
+OAUTH_CALLBACK_PARAM = "ml_oauth"
 OAUTH_STATE_MAX_AGE_SECONDS = 15 * 60
 
 
@@ -225,10 +226,11 @@ def _handle_oauth_callback(supabase: Any) -> None:
         return
 
     try:
-        code_verifier = _oauth_code_verifier_from_state(_get_query_param("state"))
+        callback_payload = _get_query_param(OAUTH_CALLBACK_PARAM)
+        code_verifier = _oauth_code_verifier_from_payload(callback_payload)
         exchange_params = {
             "auth_code": code,
-            "redirect_to": _oauth_redirect_url(),
+            "redirect_to": _oauth_redirect_url(callback_payload),
         }
         if code_verifier:
             exchange_params["code_verifier"] = code_verifier
@@ -264,7 +266,7 @@ def _render_google_login(supabase: Any) -> None:
         st.error(f"Could not start Google login: {exc}")
         return
 
-    url = _oauth_url_with_state(supabase, getattr(response, "url", ""))
+    url = _oauth_url_with_callback_payload(supabase, getattr(response, "url", ""))
     st.link_button(
         "Continue with Google",
         url,
@@ -272,17 +274,22 @@ def _render_google_login(supabase: Any) -> None:
     )
 
 
-def _oauth_redirect_url() -> str:
+def _oauth_redirect_url(callback_payload: str = "") -> str:
     configured_url = _configured_redirect_url()
     if configured_url:
-        return configured_url
+        return _url_with_query_param(
+            configured_url,
+            OAUTH_CALLBACK_PARAM,
+            callback_payload,
+        )
 
     current_url = str(getattr(st.context, "url", "") or "")
     if not current_url:
         return ""
 
     parts = urlsplit(current_url)
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    base_url = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    return _url_with_query_param(base_url, OAUTH_CALLBACK_PARAM, callback_payload)
 
 
 def _configured_redirect_url() -> str:
@@ -300,23 +307,26 @@ def _get_query_param(name: str) -> str:
 
 
 def _clear_auth_query_params() -> None:
-    for key in ("code", "error", "error_description", "state"):
+    for key in ("code", "error", "error_description", "state", OAUTH_CALLBACK_PARAM):
         if key in st.query_params:
             del st.query_params[key]
 
 
-def _oauth_url_with_state(supabase: Any, url: str) -> str:
+def _oauth_url_with_callback_payload(supabase: Any, url: str) -> str:
     code_verifier = _stored_code_verifier(supabase)
     if not code_verifier:
         return url
 
-    state = _sign_oauth_state(
+    callback_payload = _sign_oauth_payload(
         {
             "code_verifier": code_verifier,
             "iat": int(time.time()),
         }
     )
-    return _replace_query_param(url, "state", state)
+    return _oauth_url_with_redirect_to(
+        url,
+        _oauth_redirect_url(callback_payload),
+    )
 
 
 def _stored_code_verifier(supabase: Any) -> str:
@@ -332,28 +342,28 @@ def _stored_code_verifier(supabase: Any) -> str:
         return ""
 
 
-def _sign_oauth_state(payload: dict[str, Any]) -> str:
+def _sign_oauth_payload(payload: dict[str, Any]) -> str:
     raw_payload = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
     encoded_payload = _base64_url_encode(raw_payload)
     signature = hmac.new(
-        _oauth_state_secret().encode(),
+        _oauth_payload_secret().encode(),
         encoded_payload.encode(),
         hashlib.sha256,
     ).digest()
     return f"{encoded_payload}.{_base64_url_encode(signature)}"
 
 
-def _oauth_code_verifier_from_state(state: str) -> str:
-    if not state:
+def _oauth_code_verifier_from_payload(callback_payload: str) -> str:
+    if not callback_payload:
         return ""
 
     try:
-        encoded_payload, encoded_signature = state.split(".", 1)
+        encoded_payload, encoded_signature = callback_payload.split(".", 1)
     except ValueError:
         return ""
 
     expected_signature = hmac.new(
-        _oauth_state_secret().encode(),
+        _oauth_payload_secret().encode(),
         encoded_payload.encode(),
         hashlib.sha256,
     ).digest()
@@ -373,7 +383,7 @@ def _oauth_code_verifier_from_state(state: str) -> str:
     return str(payload.get("code_verifier") or "")
 
 
-def _oauth_state_secret() -> str:
+def _oauth_payload_secret() -> str:
     try:
         secret = str(st.secrets["app"]["oauth_state_secret"]).strip()
         if secret:
@@ -393,7 +403,14 @@ def _base64_url_decode(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + padding)
 
 
-def _replace_query_param(url: str, key: str, value: str) -> str:
+def _oauth_url_with_redirect_to(url: str, redirect_to: str) -> str:
+    return _url_with_query_param(url, "redirect_to", redirect_to)
+
+
+def _url_with_query_param(url: str, key: str, value: str) -> str:
+    if not value:
+        return url
+
     parts = urlsplit(url)
     params = dict(parse_qsl(parts.query, keep_blank_values=True))
     params[key] = value
