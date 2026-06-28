@@ -7,6 +7,7 @@ import streamlit as st
 from suite.auth import (
     PROFILE_LOADED_KEY,
     get_current_user,
+    is_authenticated,
     is_dev_auth_bypass_active,
 )
 from suite.state import (
@@ -93,6 +94,10 @@ def save_profile() -> Any:
 
 def render_profile_save_controls() -> None:
     with st.sidebar.expander("Profile Storage", expanded=False):
+        if not is_authenticated():
+            st.caption("Sign in from Account to save your profile.")
+            return
+
         if is_dev_auth_bypass_active():
             st.caption("Dev auth bypass is active. Supabase save is disabled.")
             return

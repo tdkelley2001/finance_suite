@@ -28,24 +28,31 @@ OAUTH_STATE_MAX_AGE_SECONDS = 15 * 60
 
 
 def render_auth_gate() -> Any:
-    """Render login/signup UI and stop the app until a user is authenticated."""
+    """Initialize optional auth without blocking anonymous app usage."""
     if _dev_auth_bypass_enabled():
         return _ensure_dev_auth_session()
 
     try:
         supabase = get_supabase()
     except SupabaseConfigError as exc:
-        st.title("Money Lab")
-        st.error(str(exc))
-        st.stop()
+        if _has_auth_callback_params():
+            st.error(str(exc))
+        return None
 
     _handle_oauth_callback(supabase)
 
     if is_authenticated():
         return st.session_state[SESSION_KEY]
 
-    st.title("Money Lab")
-    st.caption("Sign in to save and restore your financial profile.")
+    return None
+
+
+def render_login_controls() -> None:
+    try:
+        supabase = get_supabase()
+    except SupabaseConfigError as exc:
+        st.warning(str(exc))
+        return
 
     _render_google_login(supabase)
     st.divider()
@@ -108,15 +115,16 @@ def render_auth_gate() -> Any:
                         "then log in."
                     )
 
-    st.stop()
-
 
 def render_account_controls() -> None:
     user = get_current_user()
-    if user is None:
-        return
 
     with st.sidebar.expander("Account", expanded=False):
+        if user is None:
+            st.caption("Use the tools anonymously, or sign in to save your profile.")
+            render_login_controls()
+            return
+
         if is_dev_auth_bypass_active():
             st.warning("Dev auth bypass is active.")
         st.caption(getattr(user, "email", "") or getattr(user, "id", "Signed in"))
@@ -227,7 +235,7 @@ def _handle_oauth_callback(supabase: Any) -> None:
     if error:
         st.error(f"Could not log in with Google: {error}")
         _clear_auth_query_params()
-        st.stop()
+        return
 
     code = _get_query_param("code")
     if not code or is_authenticated():
@@ -249,7 +257,7 @@ def _handle_oauth_callback(supabase: Any) -> None:
     except Exception as exc:
         _clear_auth_query_params()
         st.error(f"Could not complete Google login: {exc}")
-        st.stop()
+        return
 
     if _store_auth_response(response):
         _clear_auth_query_params()
@@ -312,6 +320,13 @@ def _get_query_param(name: str) -> str:
     if isinstance(value, list):
         return str(value[0]) if value else ""
     return str(value)
+
+
+def _has_auth_callback_params() -> bool:
+    return any(
+        key in st.query_params
+        for key in ("code", "error", "error_description", OAUTH_CALLBACK_PARAM)
+    )
 
 
 def _clear_auth_query_params() -> None:
