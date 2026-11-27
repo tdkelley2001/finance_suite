@@ -12,6 +12,13 @@ in `moneylab/domain/` and `moneylab/configuration/`. Reusable calculation
 primitives live in `moneylab/engine/calculations.py`. They operate on explicit
 inputs and are independent of the application or external services.
 
+`moneylab/projection/` executes canonical monthly snapshots.
+`readiness.py` checks execution scope, `engine.py` coordinates the timeline
+and funding, and `debt.py` and `accounting.py` own their respective
+calculations. `results.py` defines output records and deterministic JSON.
+See the [M03 methodology](DETERMINISTIC_MONTHLY_PROJECTION.md) for financial
+conventions and supported cases.
+
 Keep application orchestration and session-state behavior in `suite/` or the
 tool's `app.py`. Existing imports from `suite.state` and `suite.calculations`
 are compatibility paths. Preserve the serialized state shape unless a

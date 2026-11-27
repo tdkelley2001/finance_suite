@@ -4,13 +4,14 @@ from dataclasses import dataclass, fields, replace
 from datetime import date
 from hashlib import sha256
 
+from moneylab import _codec
 from moneylab.domain.planning import FinancialPlan
 from moneylab.domain.profile import Account, Asset, FinancialProfile, Liability
 from moneylab.domain.values import Revision, Source, SourceKind, Valuation, distinct_records, identifier
 
-from . import _codec
 from .models import (
-    AnalysisRequest, AnalysisType, EconomicAssumptions, ModelPreferences, PositionValuationOverride,
+    AnalysisRequest, AnalysisType, EconomicAssumptions, ModelPreferences, PositionGrowth,
+    PositionValuationOverride,
 )
 
 
@@ -35,6 +36,10 @@ def activity_amount_field(activity_id: str) -> str:
 
 def position_valuation_field(position_id: str) -> str:
     return f"opening.positions.{position_id}.valuation"
+
+
+def position_growth_field(position_id: str) -> str:
+    return f"assumptions.positions.{position_id}.growth"
 
 
 def _valuation(position: Account | Asset | Liability) -> Valuation:
@@ -74,10 +79,11 @@ class ResolvedAnalysis:
     defaults_revision: Revision | None = None
     origins: tuple[InputOrigin, ...] = ()
     position_valuations: tuple[PositionValuationOverride, ...] = ()
-    schema_version: int = 2
+    position_growth: tuple[PositionGrowth, ...] = ()
+    schema_version: int = 3
 
     def __post_init__(self):
-        if type(self.schema_version) is not int or self.schema_version != 2:
+        if type(self.schema_version) is not int or self.schema_version != 3:
             raise ValueError("unsupported analysis snapshot schema version")
         if (not isinstance(self.request, AnalysisRequest)
                 or not isinstance(self.assumptions, EconomicAssumptions)
@@ -92,6 +98,10 @@ class ResolvedAnalysis:
             self.position_valuations, PositionValuationOverride, key=lambda entry: entry.position_id,
         )
         object.__setattr__(self, "position_valuations", valuations)
+        growth = distinct_records(self.position_growth, PositionGrowth, key=lambda entry: entry.position_id)
+        object.__setattr__(self, "position_growth", growth)
+        valuation_fields = {position_valuation_field(entry.position_id) for entry in valuations}
+        growth_fields = {position_growth_field(entry.position_id) for entry in growth}
 
         expected_origins = {"analysis.inputs"}
         for section in ("assumptions", "preferences"):
@@ -103,14 +113,14 @@ class ResolvedAnalysis:
 
         if self.request.analysis_type is AnalysisType.LOAN_PAYMENT:
             if (self.profile is not None or self.plan is not None
-                    or self.position_valuations
+                    or valuations or growth
                     or any(ref is not None for ref in revisions)
                     or expected_origins != {"analysis.inputs"}):
                 raise ValueError("loan snapshot accepts only explicit standalone inputs")
         else:
             self._validate_projection()
             expected_origins.add("profile")
-            expected_origins.update(position_valuation_field(entry.position_id) for entry in valuations)
+            expected_origins.update(valuation_fields | growth_fields)
             if self.plan is not None:
                 expected_origins.add("plan")
                 expected_origins.update(
@@ -120,13 +130,14 @@ class ResolvedAnalysis:
             raise ValueError("snapshot origins must cover the resolved inputs")
 
         sources = {origin.field: origin.source for origin in origins}
-        for entry in valuations:
-            source = sources[position_valuation_field(entry.position_id)]
+        for field in sorted(valuation_fields | growth_fields):
+            source = sources[field]
             if source.kind is SourceKind.LOCAL_OVERRIDE:
                 continue
             if (source.kind is not SourceKind.SCENARIO_OVERRIDE or self.scenario_revision is None
                     or source.reference != self.scenario_revision):
-                raise ValueError("opening position overrides require local or matching scenario provenance")
+                label = "opening position overrides" if field in valuation_fields else "position growth assumptions"
+                raise ValueError(f"{label} require local or matching scenario provenance")
 
     def _validate_projection(self):
         if self.profile is None:
@@ -143,6 +154,9 @@ class ResolvedAnalysis:
             self.plan.validate_against(self.profile)
         inputs = self.request.inputs
         positions = {position.id: position for position in self.profile.positions_for(inputs.subject)}
+        for entry in self.position_growth:
+            if not isinstance(positions.get(entry.position_id), (Account, Asset)):
+                raise ValueError(f"{entry.position_id} growth requires an in-scope account or asset")
         effective = {position_id: _valuation(position) for position_id, position in positions.items()}
         for override in self.position_valuations:
             validate_position_override(override, positions, inputs.start_on)

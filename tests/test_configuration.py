@@ -436,7 +436,7 @@ class SnapshotTests(unittest.TestCase):
         ))
         payload = json.loads(snapshot.to_json())
         for changes in (
-            {"schema_version": 1}, {"schema_version": 3}, {"schema_version": True},
+            {"schema_version": 2}, {"schema_version": 4}, {"schema_version": True},
             {"extra": "unknown"}, {"origins": []},
         ):
             with self.subTest(changes=changes), self.assertRaises(ValueError):

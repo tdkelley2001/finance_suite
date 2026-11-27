@@ -1,4 +1,4 @@
-"""JSON encoding for the versioned snapshot contract's declared record types."""
+"""Deterministic JSON for MoneyLab's internal typed analysis records."""
 
 from dataclasses import fields, is_dataclass
 from datetime import date
