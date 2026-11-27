@@ -146,8 +146,6 @@ class ResolvedAnalysis:
             raise ValueError("expected a financial profile")
         if self.preferences.horizon_months is None:
             raise MissingAnalysisInput("projection requires a horizon in months")
-        if self.preferences.use_real_dollars and self.assumptions.annual_inflation is None:
-            raise MissingAnalysisInput("real-dollar projection requires an inflation assumption")
         if self.plan is not None:
             if not isinstance(self.plan, FinancialPlan):
                 raise ValueError("expected a financial plan")

@@ -19,6 +19,10 @@ calculations. `results.py` defines output records and deterministic JSON.
 See the [M03 methodology](DETERMINISTIC_MONTHLY_PROJECTION.md) for financial
 conventions and supported cases.
 
+`moneylab/economics/` defines immutable [realized economic paths](ECONOMIC_PATHS.md).
+`moneylab/projection/path_execution.py` maps series to positions and supplies
+economic inputs to the same monthly execution loop as M03.
+
 Keep application orchestration and session-state behavior in `suite/` or the
 tool's `app.py`. Existing imports from `suite.state` and `suite.calculations`
 are compatibility paths. Preserve the serialized state shape unless a

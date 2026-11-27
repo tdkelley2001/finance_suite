@@ -119,11 +119,11 @@ class Termination:
 
 @dataclass(frozen=True, slots=True)
 class ProjectionResult:
-    """Financial results and the economic inputs M03 uses to produce them.
+    """Financial results and the explicit annual inputs used by the driver.
 
-    `position_growth` drives position returns. `annual_inflation`, when supplied,
-    drives the reporting index. The snapshot ID also identifies resolved context
-    such as a general investment return that M03 does not consume.
+    In M03, `position_growth` drives all position returns and `annual_inflation`,
+    when supplied, drives the reporting index. A path run records direct series
+    exposures and realized inflation by reference in its enclosing result.
     """
 
     input_content_id: str

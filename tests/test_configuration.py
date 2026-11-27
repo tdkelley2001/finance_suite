@@ -130,9 +130,13 @@ class ResolutionTests(unittest.TestCase):
         self.assertIsNone(result.assumptions.annual_inflation)
         self.assertIsNone(result.preferences.use_real_dollars)
         self.assertEqual(result.profile.accounts, ())
-        with self.assertRaisesRegex(MissingAnalysisInput, "requires an inflation assumption"):
-            resolve_analysis(projection_request(), profile=profile, preset=illustrative_preset(),
-                             local=AnalysisOverrides(preferences=ModelPreferences(use_real_dollars=True)))
+        from moneylab.projection import ProjectionReadinessError, project_monthly
+        real = resolve_analysis(
+            projection_request(), profile=profile, preset=illustrative_preset(),
+            local=AnalysisOverrides(preferences=ModelPreferences(use_real_dollars=True)),
+        )
+        with self.assertRaisesRegex(ProjectionReadinessError, "requires an inflation assumption"):
+            project_monthly(real)
         with self.assertRaisesRegex(ValueError, "unknown analysis subject"):
             resolve_analysis(projection_request(HOUSEHOLD), profile=profile, defaults=research_defaults())
 
