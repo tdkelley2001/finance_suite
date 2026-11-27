@@ -3,7 +3,7 @@
 from dataclasses import fields, replace
 
 from moneylab.domain.planning import ActivityKind, FinancialPlan
-from moneylab.domain.profile import FinancialProfile
+from moneylab.domain.profile import Account, Asset, FinancialProfile
 from moneylab.domain.values import Source, SourceKind
 
 from .models import (
@@ -18,7 +18,7 @@ from .models import (
 )
 from .snapshot import (
     InputOrigin, MissingAnalysisInput, ResolvedAnalysis, activity_amount_field,
-    position_valuation_field, validate_position_override,
+    position_growth_field, position_valuation_field, validate_position_override,
 )
 
 
@@ -69,16 +69,23 @@ def _resolve_plan(plan, profile, subject, override_layers, origins):
     return replace(plan, activities=tuple(resolved))
 
 
-def _resolve_position_valuations(profile, inputs, override_layers, origins):
+def _resolve_positions(profile, inputs, override_layers, origins):
     positions = {position.id: position for position in profile.positions_for(inputs.subject)}
     selected = {}
+    growth = {}
     for overrides, source in override_layers:
         for override in overrides.position_valuations:
             validate_position_override(override, positions, inputs.start_on)
             if override.position_id not in selected:
                 selected[override.position_id] = override
                 origins.append(InputOrigin(position_valuation_field(override.position_id), source))
-    return tuple(selected.values())
+        for entry in overrides.position_growth:
+            if not isinstance(positions.get(entry.position_id), (Account, Asset)):
+                raise ValueError(f"{entry.position_id} growth requires an in-scope account or asset")
+            if entry.position_id not in growth:
+                growth[entry.position_id] = entry
+                origins.append(InputOrigin(position_growth_field(entry.position_id), source))
+    return tuple(selected.values()), tuple(growth.values())
 
 
 def resolve_analysis(
@@ -123,6 +130,7 @@ def resolve_analysis(
         config_layers.append((defaults, Source(SourceKind.RESEARCH_DEFAULT, defaults.revision)))
 
     origins.append(InputOrigin("profile", profile.source or Source(SourceKind.USER_FACT, profile.revision)))
+    valuations, growth = _resolve_positions(profile, request.inputs, override_layers, origins)
     return ResolvedAnalysis(
         request=request,
         profile=profile,
@@ -132,6 +140,7 @@ def resolve_analysis(
         scenario_revision=scenario.revision if scenario else None,
         preset_revision=preset.revision if preset else None,
         defaults_revision=defaults.revision if defaults else None,
-        position_valuations=_resolve_position_valuations(profile, request.inputs, override_layers, origins),
+        position_valuations=valuations,
+        position_growth=growth,
         origins=tuple(origins),
     )

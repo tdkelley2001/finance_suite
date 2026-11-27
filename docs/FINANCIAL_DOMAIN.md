@@ -7,8 +7,10 @@
   defines money, dates, provenance, and revision conventions.
 - `moneylab.configuration` defines typed analysis requests, economic assumptions,
   model preferences, presets, scenarios, and the resolver. Its snapshot is the
-  input boundary for future calculation engines. Calculated metrics and projected
-  states belong to those engines' outputs.
+  input boundary for calculation engines. Calculated metrics and projected
+  states belong to those engines' outputs. The
+  [deterministic projection methodology](DETERMINISTIC_MONTHLY_PROJECTION.md)
+  defines M03 execution readiness and timing.
 - Both packages use only the Python standard library. For existing calculators,
   `moneylab.engine.calculations` remains a source of tested financial primitives.
   The standalone loan example verifies the existing fixed-payment primitive at
@@ -67,9 +69,8 @@ value. Aggregate balances, net worth, and savings rates are derived outputs.
   Mixed currencies are rejected. A standalone request has its own currency.
 - Dates are calendar dates without times or time zones. Activity periods
   include `start_on` and exclude `end_before`, with no end when absent.
-  Frequencies describe the period of the stated amount. M03 will define
-  occurrence expansion, intra-month timing, proration, and monthly rate
-  conversion.
+  Frequencies describe the period of the stated amount. Each execution
+  methodology determines which schedules it supports.
 
 ## Financial plans
 
@@ -96,16 +97,16 @@ The saved scheduled change becomes applicable on its date.
 ### Analysis scope and attribution
 
 Subject selection determines which records are relevant. A structurally valid
-profile and a resolved snapshot can still leave an ambiguous projection. M03
-must define and validate how selected positions and flows are attributed.
+profile and a resolved snapshot can still leave an ambiguous projection.
+M03 checks its execution scope separately.
 
-| Case | M02 representation and M03 decision |
+| Case | Domain representation and M03 execution boundary |
 | --- | --- |
-| Joint position in an individual analysis | The position participates once and carries its full valuation and legal ownership. M03 must determine how much of it to attribute to the person and how payments, contributions, and withdrawals affect that share. |
-| Household activity routed through individually or jointly owned positions | The plan can route household activity through positions with at least one owner or obligor in the household. Household analysis selects household and member activities. Individual analysis selects only activity assigned to that individual, even when household activity uses the same account. M03 must decide how to account for that activity when it affects an individual's position. |
-| Position shared with someone outside the household | The position participates once if a household member is an owner or obligor. M03 must decide how to represent value and cash flows attributable to outside parties. |
-| Unknown shares | A subject who covers every owner covers the whole legal position. The share of a subject covering only some owners remains unknown when shares were omitted. M03 must require appropriate attribution inputs where this affects the calculation. |
-| Transfer across an individual's analysis boundary | A household-assigned transfer from Alex's account to Blair's account is internal to their household. Alex's individual activity selection currently omits it even though it affects Alex's account. M03 must decide which transfers to include and how to reconcile both sides without double counting. |
+| Joint position in an individual analysis | The position carries its full valuation and legal ownership. M03 rejects partial ownership. |
+| Household activity through individual or joint positions | Household analysis selects household and member activity. An individual projection rejects overlapping outside-subject activity affecting an in-scope position. |
+| Position shared with someone outside the household | The position is in scope when a household member is an owner or obligor. M03 rejects it if another owner or obligor is outside the household. |
+| Unknown shares | Full coverage includes every owner and does not require internal shares. M03 rejects partial coverage even when shares are known. |
+| Transfer across an individual's analysis boundary | A household transfer can cross an individual's boundary. M03 rejects the individual run when the in-scope position is affected. |
 
 ## Configuration and analysis readiness
 
@@ -118,6 +119,7 @@ projection horizon in months and whether results use real dollars.
 | Economic assumptions and model preferences | Local analysis override → saved scenario override → selected preset → explicitly supplied research defaults |
 | In-scope recurring amount | Local analysis override → saved scenario override → baseline plan |
 | In-scope opening account valuation, asset valuation, or liability balance | Local analysis override → saved scenario override → baseline valuation |
+| In-scope account or asset annual effective growth | Local analysis override → saved scenario override |
 | Ownership, position inventory, plan routes, activity dates, and scheduled changes | Baseline records supplied by the caller |
 
 Configuration field `None` is equivalent to omission and falls through.
@@ -154,6 +156,25 @@ their recorded amounts. For weight-based holdings, the recorded weights are
 available for the hypothetical total with the undisclosed weight still
 unclassified. Neither policy adds holdings or changes the authoritative profile.
 
+### Position growth
+
+`PositionGrowth` assigns an explicit effective annual rate to an existing,
+in-scope account or non-account asset. Zero deliberately selects static value.
+Scenario and local layers are validated independently. The resolved records
+and their origins at `assumptions.positions.<id>.growth` are part of the
+snapshot. No missing rate is filled by a global assumption, preset, or default.
+
+The resolved general `annual_investment_return` is contextual for M03. A
+resolved snapshot can describe assumptions that a particular methodology
+does not consume. M03 reports the explicit position rates and inflation
+input it uses. Later methodologies can combine centralized economic
+preset assumptions with explicit investment allocations to produce
+position-level returns under a versioned mapping. That mapping must
+identify its data and assumptions, handle incomplete allocations explicitly,
+and preserve the provenance of the effective rates it produces.
+
+### Structural validation
+
 Structural validation covers field types, amounts, ownership and cross-record
 references. Partial profiles can still have missing optional information.
 Empty collections enumerate supplied records and carry no assertion of catalog
@@ -163,9 +184,8 @@ It rejects scenario and profile context. The initial monthly projection
 contract requires a valid subject, a first-of-month start date, a horizon,
 and known effective valuations dated on or before the start for participating positions.
 An explicit real-dollar preference also requires inflation. Optional assumptions
-stay unset if unavailable. This validates the input contract only. M03 still
-needs model-specific checks for missing return assumptions, opening valuation
-alignment, legal-share attribution, and debt payment treatment.
+stay unset if unavailable. Execution applies the separate readiness checks in
+the [M03 methodology](DETERMINISTIC_MONTHLY_PROJECTION.md).
 
 ## Snapshot lifecycle and reproducibility
 
@@ -182,13 +202,14 @@ their sources in `origins` at `opening.positions.<id>.valuation`.
 Activity amounts, assumptions, and preferences also identify
 their source. Facts, goals and events keep their provenance on their records.
 Methods and external data revisions, seed, and path count are captured when
-the caller supplies them. No projection method or dataset revision is bundled.
+the caller supplies them. M03 records the methodology it actually executes
+in the result. No external dataset revision is bundled.
 
 Snapshots use frozen records and privately captured tuples on construction.
 Replacing a source profile, plan or preset produces new input records and
-does not change previous snapshots. The M02 review refinement uses snapshot
-schema version 2 for the explicit position overlay. The earlier schema was
-unreleased, so the reader supports version 2 only. The JSON contract
+does not change previous snapshots. Snapshot schema version 3 adds explicit
+position growth. The reader supports version 3; re-resolve source records
+to use snapshots from older development versions. The JSON contract
 round-trips through the same validation and rejects unknown fields, duplicate
 JSON keys, and unsupported versions. Canonical JSON sorts object keys and
 uses compact separators, ISO dates, Decimal strings with insignificant trailing

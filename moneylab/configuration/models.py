@@ -97,11 +97,24 @@ class PositionValuationOverride:
 
 
 @dataclass(frozen=True, slots=True)
+class PositionGrowth:
+    position_id: str
+    annual_effective_rate: Decimal
+
+    def __post_init__(self):
+        identifier(self.position_id)
+        decimal_value(self.annual_effective_rate)
+        if self.annual_effective_rate <= -1:
+            raise ValueError("position growth rates must be greater than -1")
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisOverrides:
     assumptions: EconomicAssumptions = EconomicAssumptions()
     preferences: ModelPreferences = ModelPreferences()
     activity_amounts: tuple[ActivityAmountOverride, ...] = ()
     position_valuations: tuple[PositionValuationOverride, ...] = ()
+    position_growth: tuple[PositionGrowth, ...] = ()
 
     def __post_init__(self):
         _validate_sections(self.assumptions, self.preferences)
@@ -113,6 +126,8 @@ class AnalysisOverrides:
             self.position_valuations, PositionValuationOverride, key=lambda entry: entry.position_id,
         )
         object.__setattr__(self, "position_valuations", valuations)
+        growth = distinct_records(self.position_growth, PositionGrowth, key=lambda entry: entry.position_id)
+        object.__setattr__(self, "position_growth", growth)
 
 
 @dataclass(frozen=True, slots=True)
