@@ -6,7 +6,7 @@ from .models import (
     MonthlyHousingCost,
     AffordabilityResult,
 )
-from suite.calculations import (
+from moneylab.engine.calculations import (
     cash_required,
     constrained_payment_limit,
     fixed_payment,

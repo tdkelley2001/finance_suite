@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from suite.state import Asset, BalanceSheetState, FinancialAccount, Liability
+from moneylab.engine.models import Asset, BalanceSheetState, FinancialAccount, Liability
 
 
 LIQUID_ACCOUNT_TYPES = {

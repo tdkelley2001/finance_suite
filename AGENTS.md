@@ -6,6 +6,7 @@ MoneyLab is a financial research and decision-support platform. Calculations mus
 ## Current repository
 - Existing application entry point: `app.py` (Streamlit).
 - Shared state and helpers: `suite/`.
+- Reusable, framework-independent financial code: `moneylab/engine/`.
 - Focused financial tools: `net_worth/`, `budget/`, `emergency_fund/`, `housing_affordability/`, and `rent_vs_buy/`.
 - `STATE_ARCHITECTURE.md` describes the current state, not a guarantee of the future architecture.
 - The anticipated future stack is React/TypeScript + FastAPI + a Streamlit-independent Python financial engine. **Do not begin that migration unless it is explicitly in scope.**
@@ -15,6 +16,10 @@ MoneyLab is a financial research and decision-support platform. Calculations mus
 - Create changes on feature branches; submit a pull request for review rather than merging into `main` yourself.
 - Preserve the existing Streamlit application until a tested replacement exists.
 - Avoid unrelated reformatting, dependency upgrades, or wholesale restructuring.
+- Keep financial engine modules free of Streamlit, authentication, Supabase,
+  credentials, network access, and implicit application state.
+- Treat `suite.state` and `suite.calculations` as compatibility APIs; preserve
+  persisted-state field names unless a reviewed migration is in scope.
 - Never commit credentials, OAuth tokens, Supabase service keys, real user financial data, or local secrets. This repository may be publicly visible.
 - Do not disable authentication or weaken production security to make tests pass. Development-only bypasses must be explicitly restricted.
 - Keep guest access and user-controlled scenarios in mind when designing new architecture, but do not implement them outside the assigned milestone.
@@ -31,7 +36,7 @@ MoneyLab is a financial research and decision-support platform. Calculations mus
 Use Python 3.11, matching the existing devcontainer:
 ```bash
 python -m pip install -r requirements.txt
-python -m compileall -q app.py suite budget emergency_fund housing_affordability net_worth rent_vs_buy assumptions
+python -m compileall -q app.py moneylab suite budget emergency_fund housing_affordability net_worth rent_vs_buy assumptions
 python -m unittest discover -s tests -v
 ```
 The tests are intentionally small baseline safeguards. Do not claim full model validation from them.

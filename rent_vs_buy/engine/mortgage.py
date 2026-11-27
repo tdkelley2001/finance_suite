@@ -1,5 +1,5 @@
 import pandas as pd
-from suite.calculations import amortization_schedule, fixed_payment
+from moneylab.engine.calculations import amortization_schedule, fixed_payment
 
 
 def mortgage_schedule(assump):

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Dict
 from .models import BudgetProfile
-from suite.calculations import cash_flow_snapshot
+from moneylab.engine.calculations import cash_flow_snapshot
 
 
 @dataclass

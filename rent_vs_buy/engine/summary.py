@@ -1,7 +1,7 @@
 import pandas as pd
 
 from rent_vs_buy.engine.assumptions import Assumptions
-from suite.calculations import compound_value
+from moneylab.engine.calculations import compound_value
 
 
 def build_summary(yearly: pd.DataFrame, assump: Assumptions):
