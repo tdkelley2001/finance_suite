@@ -2,17 +2,19 @@
 
 from dataclasses import dataclass, replace
 from decimal import Decimal, localcontext
+from itertools import repeat
 
+from moneylab._calendar import month_boundary
 from moneylab.configuration.snapshot import ResolvedAnalysis
 from moneylab.domain.planning import ActivityKind, RecurringActivity
 from moneylab.domain.profile import Account, Liability
+from moneylab.economics.rates import CALCULATION_CONTEXT, ONE, monthly_effective_rate
 
 from .accounting import (
-    CALCULATION_CONTEXT, ONE, ZERO, ProjectionRangeError, advance_inflation_index, money_round,
-    monthly_effective_rate, observe, reconcile,
+    ZERO, ProjectionRangeError, advance_inflation_index, money_round, observe, reconcile,
 )
 from .debt import quote_debt
-from .readiness import METHODOLOGY, month_boundary, prepare
+from .readiness import METHODOLOGY, prepare
 from .results import (
     EffectKind, FinancialEffect, FundingShortfall, MonthPeriod, MonthResult, PlannedAmount,
     PositionKind, Posting, ProjectionResult, ProjectionStatus, Termination,
@@ -150,48 +152,59 @@ def _execute_month(prepared, period, opening, kinds, monthly_rates, inflation_in
     return MonthResult(period, observation, ledger, reconciliation), closing
 
 
+def _run_months(snapshot, prepared, conditions, *, methodology, has_inflation, annual_inflation, position_growth):
+    """Run prevalidated month inputs in the common Decimal context."""
+    index = ONE if has_inflation else None
+    real_dollars = snapshot.preferences.use_real_dollars is True
+    inputs = snapshot.request.inputs
+    horizon = snapshot.preferences.horizon_months
+    kinds = {
+        key: (PositionKind.LIABILITY if isinstance(position, Liability) else
+              PositionKind.ACCOUNT if isinstance(position, Account) else PositionKind.ASSET)
+        for key, position in prepared.positions.items()
+    }
+    balances = prepared.opening
+    initial = observe(inputs.start_on, balances, kinds, index, real_dollars)
+    months = []
+    termination = None
+    for offset, (monthly_rates, inflation_factor) in enumerate(conditions):
+        period = MonthPeriod(month_boundary(inputs.start_on, offset),
+                             month_boundary(inputs.start_on, offset + 1))
+        try:
+            if inflation_factor is not None:
+                index = advance_inflation_index(index, inflation_factor)
+            executed = _execute_month(prepared, period, balances, kinds, monthly_rates, index, real_dollars)
+        except ProjectionRangeError as exc:
+            raise ProjectionRangeError(f"{period.start_on}: {exc}") from exc
+        if isinstance(executed, Termination):
+            termination = executed
+            break
+        month, balances = executed
+        months.append(month)
+    if termination is None and len(months) != horizon:
+        raise RuntimeError("month driver did not supply the requested horizon")
+    return ProjectionResult(
+        input_content_id=snapshot.content_id, methodology=methodology,
+        currency=snapshot.profile.currency, subject=inputs.subject, requested_months=horizon,
+        completed_months=len(months),
+        status=ProjectionStatus.COMPLETED if termination is None else ProjectionStatus.STOPPED,
+        opening=initial, months=tuple(months), annual_inflation=annual_inflation,
+        position_growth=position_growth, termination=termination,
+    )
+
+
 def project_monthly(snapshot: ResolvedAnalysis) -> ProjectionResult:
-    """Execute M03, returning the last committed observation on a modeled stop."""
+    """Execute M03 with constant rates and the original deterministic result contract."""
     prepared = prepare(snapshot)
     with localcontext(CALCULATION_CONTEXT):
-        monthly_rates = {
+        rates = {
             item.position_id: monthly_effective_rate(item.annual_effective_rate)
             for item in snapshot.position_growth
         }
         inflation = snapshot.assumptions.annual_inflation
-        inflation_factor = ONE + monthly_effective_rate(inflation) if inflation is not None else None
-        index = ONE if inflation_factor is not None else None
-        real_dollars = snapshot.preferences.use_real_dollars is True
-        inputs = snapshot.request.inputs
-        horizon = snapshot.preferences.horizon_months
-        kinds = {
-            key: (PositionKind.LIABILITY if isinstance(position, Liability) else
-                  PositionKind.ACCOUNT if isinstance(position, Account) else PositionKind.ASSET)
-            for key, position in prepared.positions.items()
-        }
-        balances = prepared.opening
-        initial = observe(inputs.start_on, balances, kinds, index, real_dollars)
-        months = []
-        termination = None
-        for offset in range(horizon):
-            period = MonthPeriod(month_boundary(inputs.start_on, offset),
-                                 month_boundary(inputs.start_on, offset + 1))
-            try:
-                if inflation_factor is not None:
-                    index = advance_inflation_index(index, inflation_factor)
-                executed = _execute_month(prepared, period, balances, kinds, monthly_rates, index, real_dollars)
-            except ProjectionRangeError as exc:
-                raise ProjectionRangeError(f"{period.start_on}: {exc}") from exc
-            if isinstance(executed, Termination):
-                termination = executed
-                break
-            month, balances = executed
-            months.append(month)
-        return ProjectionResult(
-            input_content_id=snapshot.content_id, methodology=METHODOLOGY,
-            currency=snapshot.profile.currency, subject=inputs.subject, requested_months=horizon,
-            completed_months=len(months),
-            status=ProjectionStatus.COMPLETED if termination is None else ProjectionStatus.STOPPED,
-            opening=initial, months=tuple(months), annual_inflation=inflation,
-            position_growth=snapshot.position_growth, termination=termination,
+        factor = ONE + monthly_effective_rate(inflation) if inflation is not None else None
+        conditions = repeat((rates, factor), snapshot.preferences.horizon_months)
+        return _run_months(
+            snapshot, prepared, conditions, methodology=METHODOLOGY, has_inflation=inflation is not None,
+            annual_inflation=inflation, position_growth=snapshot.position_growth,
         )

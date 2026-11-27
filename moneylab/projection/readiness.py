@@ -1,9 +1,9 @@
 """Execution-specific validation over structurally valid input snapshots."""
 
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
 
+from moneylab._calendar import month_boundary
 from moneylab.configuration.models import AnalysisType
 from moneylab.configuration.snapshot import ResolvedAnalysis
 from moneylab.domain.planning import ActivityKind, Frequency, RecurringActivity, ScheduledAmountChange
@@ -16,6 +16,7 @@ from .results import ExecutionIssue, MonthPeriod
 
 
 METHODOLOGY = Revision("deterministic-monthly-projection", "1.0.0")
+PATH_METHODOLOGY = Revision("realized-economic-path-monthly-projection", "1.0.0")
 Position = Account | Asset | Liability
 
 
@@ -36,11 +37,6 @@ class PreparedProjection:
     opening: dict[str, Decimal]
     activities: tuple[RecurringActivity, ...]
     changes: dict[str, tuple[ScheduledAmountChange, ...]]
-
-
-def month_boundary(start: date, months: int) -> date:
-    years, month = divmod(start.month - 1 + months, 12)
-    return date(start.year + years, month + 1, 1)
 
 
 def _overlaps(activity: RecurringActivity, period: MonthPeriod) -> bool:
@@ -68,7 +64,7 @@ def _check_position(position, valuation, members, growth, horizon, issues):
             position.id,
         ))
     if not isinstance(position, Liability):
-        if position.id not in growth:
+        if growth is not None and position.id not in growth:
             issues.append(ExecutionIssue("missing_growth", "supply an effective annual growth rate or zero",
                                          position.id))
         return
@@ -181,14 +177,19 @@ def _schedule(snapshot, positions, effective, horizon, issues):
     return tuple(activities), {key: tuple(entries) for key, entries in changes.items()}
 
 
-def prepare(snapshot: ResolvedAnalysis) -> PreparedProjection:
+def prepare(snapshot: ResolvedAnalysis, *, path_driven: bool = False) -> PreparedProjection:
     if (not isinstance(snapshot, ResolvedAnalysis)
             or snapshot.request.analysis_type is not AnalysisType.MONTHLY_PROJECTION):
         raise ProjectionReadinessError((ExecutionIssue("analysis_type", "expected a monthly projection snapshot"),))
     if snapshot.request.stochastic is not None:
-        raise ProjectionReadinessError((ExecutionIssue("stochastic", "this methodology is deterministic"),))
-    if snapshot.request.methodology not in (None, METHODOLOGY):
-        raise ProjectionReadinessError((ExecutionIssue("methodology", "requested methodology differs from M03"),))
+        raise ProjectionReadinessError((ExecutionIssue(
+            "stochastic", "this entry point does not generate stochastic paths",
+        ),))
+    methodology = PATH_METHODOLOGY if path_driven else METHODOLOGY
+    if snapshot.request.methodology not in (None, methodology):
+        raise ProjectionReadinessError((ExecutionIssue(
+            "methodology", f"requested methodology differs from {methodology.id} {methodology.version}",
+        ),))
 
     inputs = snapshot.request.inputs
     profile = snapshot.profile
@@ -199,8 +200,10 @@ def prepare(snapshot: ResolvedAnalysis) -> PreparedProjection:
     positions = {item.id: item for item in profile.positions_for(inputs.subject)}
     effective = snapshot.opening_valuations()
     members = profile.people_in(inputs.subject)
-    growth = {entry.position_id for entry in snapshot.position_growth}
+    growth = None if path_driven else {entry.position_id for entry in snapshot.position_growth}
     issues = []
+    if not path_driven and snapshot.preferences.use_real_dollars and snapshot.assumptions.annual_inflation is None:
+        issues.append(ExecutionIssue("missing_inflation", "real-dollar projection requires an inflation assumption"))
     for key, position in positions.items():
         _check_position(position, effective[key], members, growth, horizon, issues)
     activities, changes = _schedule(snapshot, positions, effective, horizon, issues)

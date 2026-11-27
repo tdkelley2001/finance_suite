@@ -1,6 +1,8 @@
 """Deterministic rate conversion, postings and reconciliation."""
 
-from decimal import Context, Decimal, Overflow, ROUND_HALF_EVEN, localcontext
+from decimal import Decimal, Overflow, localcontext
+
+from moneylab.economics.rates import CALCULATION_CONTEXT
 
 from .results import (
     EffectKind, FinancialEffect, Observation, PositionBalance, PositionKind, Reconciliation,
@@ -8,9 +10,7 @@ from .results import (
 
 
 ZERO = Decimal(0)
-ONE = Decimal(1)
 MONEY_QUANTUM = Decimal("0.00000001")
-CALCULATION_CONTEXT = Context(prec=60, rounding=ROUND_HALF_EVEN)
 AMOUNT_LIMIT = Decimal("1e30")
 
 
@@ -29,10 +29,6 @@ def money_round(amount: Decimal, *, field: str = "projection amount") -> Decimal
     if rounded.copy_abs() >= AMOUNT_LIMIT:
         raise ProjectionRangeError(f"{field} rounds beyond the projection amount limit")
     return rounded
-
-
-def monthly_effective_rate(annual: Decimal) -> Decimal:
-    return (ONE + annual) ** (ONE / 12) - ONE
 
 
 def advance_inflation_index(index: Decimal, monthly_factor: Decimal) -> Decimal:

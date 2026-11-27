@@ -165,13 +165,9 @@ boundary receives realized monthly growth rates keyed by position and the
 cumulative index at the closing boundary. It owns postings, fixed-rate debt,
 funding checks, atomic settlement, and reconciliation.
 
-M04 should validate period alignment and position coverage before passing
-period-specific realized rates and the closing index to that same month
-execution path. The path driver should own the monthly inflation factors,
-accumulate the index from the opening basis, and record the economic path's
-inputs and provenance. Historical and stochastic paths need their own
-generation or replay rules. The financial effects and settlement logic belong
-in the shared month executor.
+The [economic path driver](ECONOMIC_PATHS.md) supplies period-specific monthly
+rates and inflation factors to the same loop and settlement logic. M03's
+deterministic entry point and result format are unchanged.
 
 ## Independent validation
 

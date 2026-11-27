@@ -183,9 +183,12 @@ Standalone loan input requires only principal, rate, and a term in months.
 It rejects scenario and profile context. The initial monthly projection
 contract requires a valid subject, a first-of-month start date, a horizon,
 and known effective valuations dated on or before the start for participating positions.
-An explicit real-dollar preference also requires inflation. Optional assumptions
-stay unset if unavailable. Execution applies the separate readiness checks in
-the [M03 methodology](DETERMINISTIC_MONTHLY_PROJECTION.md).
+Inflation requirements are checked at execution readiness. A real-dollar
+M03 run requires an annual inflation assumption. A real-dollar
+[economic path run](ECONOMIC_PATHS.md) requires complete realized monthly
+inflation and an unset annual inflation assumption in the snapshot. This
+readiness split leaves the financial snapshot schema unchanged. Optional
+assumptions stay unset if unavailable.
 
 ## Snapshot lifecycle and reproducibility
 
