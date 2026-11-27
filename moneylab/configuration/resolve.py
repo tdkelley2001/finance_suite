@@ -16,7 +16,10 @@ from .models import (
     ResearchDefaults,
     Scenario,
 )
-from .snapshot import InputOrigin, MissingAnalysisInput, ResolvedAnalysis, activity_amount_field
+from .snapshot import (
+    InputOrigin, MissingAnalysisInput, ResolvedAnalysis, activity_amount_field,
+    position_valuation_field, validate_position_override,
+)
 
 
 def _select(section, record_type, layers, origins):
@@ -64,6 +67,18 @@ def _resolve_plan(plan, profile, subject, override_layers, origins):
         origins.append(InputOrigin(activity_amount_field(activity.id), source))
         resolved.append(replace(activity, amount=amount) if activity.id in changes else activity)
     return replace(plan, activities=tuple(resolved))
+
+
+def _resolve_position_valuations(profile, inputs, override_layers, origins):
+    positions = {position.id: position for position in profile.positions_for(inputs.subject)}
+    selected = {}
+    for overrides, source in override_layers:
+        for override in overrides.position_valuations:
+            validate_position_override(override, positions, inputs.start_on)
+            if override.position_id not in selected:
+                selected[override.position_id] = override
+                origins.append(InputOrigin(position_valuation_field(override.position_id), source))
+    return tuple(selected.values())
 
 
 def resolve_analysis(
@@ -117,5 +132,6 @@ def resolve_analysis(
         scenario_revision=scenario.revision if scenario else None,
         preset_revision=preset.revision if preset else None,
         defaults_revision=defaults.revision if defaults else None,
+        position_valuations=_resolve_position_valuations(profile, request.inputs, override_layers, origins),
         origins=tuple(origins),
     )

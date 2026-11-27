@@ -13,11 +13,11 @@ import unittest
 from moneylab.configuration.models import (
     ActivityAmountOverride, AnalysisOverrides, AnalysisRequest, AnalysisType,
     EconomicAssumptions, LoanPaymentInputs, ModelPreferences, MonthlyProjectionInputs,
-    Preset, ResearchDefaults, Scenario, StochasticExecution,
+    PositionValuationOverride, Preset, ResearchDefaults, Scenario, StochasticExecution,
 )
 from moneylab.configuration.resolve import resolve_analysis
 from moneylab.configuration.snapshot import MissingAnalysisInput, ResolvedAnalysis
-from moneylab.domain.profile import FinancialProfile
+from moneylab.domain.profile import AssetClass, FinancialProfile, Holding
 from moneylab.domain.values import Money, Revision, Source, SourceKind, Valuation
 
 from test_canonical_domain import HOUSEHOLD, INDIVIDUAL, START, household_example, individual_example, usd
@@ -217,7 +217,158 @@ class ResolutionTests(unittest.TestCase):
             )
 
 
+class PositionOverrideTests(unittest.TestCase):
+    def setUp(self):
+        self.profile, self.plan = household_example()
+        self.context = dict(profile=self.profile, plan=self.plan, preset=illustrative_preset())
+        self.request = projection_request()
+
+    @staticmethod
+    def override(position_id, amount, as_of=START, currency="USD"):
+        return PositionValuationOverride(position_id, Valuation(currency, D(amount), as_of))
+
+    def test_scenario_and_local_precedence_preserve_authoritative_positions(self):
+        saved = [
+            self.override("cash", "8000"), self.override("car", "7000"),
+            self.override("loan", "3000"), self.override("joint", "9000"),
+        ]
+        scenario = Scenario(
+            Revision("position-case", "1"), "Opening position case", self.profile.revision.id,
+            overrides=AnalysisOverrides(position_valuations=saved),
+        )
+        local = AnalysisOverrides(position_valuations=[self.override("cash", "0")])
+        baseline = resolve_analysis(self.request, **self.context)
+        hypothetical = resolve_analysis(self.request, scenario=scenario, **self.context)
+        resolved = resolve_analysis(self.request, scenario=scenario, local=local, **self.context)
+        self.assertIs(resolved.profile, self.profile)
+        self.assertEqual(baseline.opening_valuations()["cash"].amount, D("5000"))
+        self.assertEqual(hypothetical.opening_valuations()["cash"].amount, D("8000"))
+        self.assertEqual(resolved.opening_valuations()["cash"].amount, D(0))
+        self.assertEqual(resolved.opening_valuations()["car"].amount, D("7000"))
+        self.assertEqual(resolved.opening_valuations()["loan"].amount, D("3000"))
+        self.assertEqual(resolved.opening_valuations()["joint"].amount, D("9000"))
+        self.assertEqual(resolved.opening_valuations()["ira"].amount, D("12000"))
+        saved_cash = next(entry for entry in scenario.overrides.position_valuations
+                          if entry.position_id == "cash")
+        self.assertEqual(saved_cash, saved[0])
+        self.assertEqual(resolve_analysis(self.request, **self.context), baseline)
+        origins = {item.field: item.source for item in resolved.origins}
+        self.assertEqual(origins["opening.positions.cash.valuation"], Source(SourceKind.LOCAL_OVERRIDE))
+        for position_id in ("car", "joint", "loan"):
+            self.assertEqual(origins[f"opening.positions.{position_id}.valuation"],
+                             Source(SourceKind.SCENARIO_OVERRIDE, scenario.revision))
+        self.assertEqual(ResolvedAnalysis.from_json(resolved.to_json()), resolved)
+
+    def test_invalid_and_shadowed_overrides_are_rejected(self):
+        for override, message in (
+            (self.override("missing", "5"), "unknown or out-of-scope position"),
+            (self.override("blair-cash", "5"), "unknown or out-of-scope position"),
+            (self.override("cash", "5", currency="EUR"), "requires USD"),
+            (self.override("cash", "5", as_of=date(2030, 1, 2)), "dated after"),
+        ):
+            local = AnalysisOverrides(position_valuations=[override])
+            with self.subTest(override=override), self.assertRaisesRegex(ValueError, message):
+                resolve_analysis(self.request, local=local, **self.context)
+        scenario = Scenario(
+            Revision("shadowed", "1"), "Shadowed", self.profile.revision.id,
+            overrides=AnalysisOverrides(position_valuations=[self.override("cash", "7", currency="EUR")]),
+        )
+        with self.assertRaisesRegex(ValueError, "requires USD"):
+            resolve_analysis(self.request, scenario=scenario, **self.context,
+                             local=AnalysisOverrides(position_valuations=[self.override("cash", "0")]))
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            AnalysisOverrides(position_valuations=[self.override("cash", "7"), self.override("cash", "8")])
+        for amount, as_of in (("1", None), ("-1", START), ("0.000000001", START), ("NaN", START)):
+            with self.subTest(amount=amount, as_of=as_of), self.assertRaises(ValueError):
+                self.override("cash", amount, as_of)
+        with self.assertRaisesRegex(ValueError, "explicit dated amount"):
+            PositionValuationOverride("cash", Valuation("USD"))
+
+    def test_holdings_consistency_applies_to_each_override(self):
+        cash = next(item for item in self.profile.accounts if item.id == "cash")
+        holdings = [Holding("disclosed-cash", AssetClass.CASH, value=usd("4000"))]
+        cash = replace(cash, holdings=holdings)
+        profile = replace(self.profile, accounts=[
+            cash if item.id == "cash" else item for item in self.profile.accounts
+        ])
+        context = {**self.context, "profile": profile}
+        for override, message in (
+            (self.override("cash", "3999"), "holding values exceed"),
+            (self.override("cash", "6000", date(2029, 12, 31)), "original valuation date"),
+        ):
+            with self.subTest(override=override), self.assertRaisesRegex(ValueError, message):
+                resolve_analysis(self.request, **context,
+                                 local=AnalysisOverrides(position_valuations=[override]))
+        resolved = resolve_analysis(
+            self.request, **context,
+            local=AnalysisOverrides(position_valuations=[
+                self.override("cash", "6000"), self.override("ira", "0", date(2029, 12, 31)),
+            ]),
+        )
+        self.assertEqual(resolved.opening_valuations()["cash"].amount, D("6000"))
+        self.assertEqual(resolved.opening_valuations()["ira"].amount, D(0))
+        self.assertEqual(next(item for item in resolved.profile.accounts if item.id == "cash"), cash)
+
+    def test_hypothetical_opening_value_can_fill_an_unknown_baseline(self):
+        profile = replace(self.profile, accounts=[
+            replace(account, valuation=Valuation("USD")) if account.id == "cash" else account
+            for account in self.profile.accounts
+        ])
+        context = {**self.context, "profile": profile}
+        with self.assertRaisesRegex(MissingAnalysisInput, "opening amount for cash"):
+            resolve_analysis(self.request, **context)
+        resolved = resolve_analysis(self.request, **context,
+                                    local=AnalysisOverrides(position_valuations=[self.override("cash", "0")]))
+        self.assertEqual(resolved.opening_valuations()["cash"].amount, D(0))
+        self.assertIsNone(next(item for item in resolved.profile.accounts if item.id == "cash").valuation.amount)
+
+    def test_presets_and_defaults_cannot_supply_position_overrides(self):
+        for config in (illustrative_preset(), research_defaults()):
+            with self.subTest(config=type(config)), self.assertRaises(TypeError):
+                replace(config, position_valuations=[self.override("cash", "0")])
+
+    def test_snapshot_round_trip_immutability_and_content_identification(self):
+        changes = [self.override("cash", "0"), self.override("car", "7000")]
+        snapshot = resolve_analysis(self.request, **self.context,
+                                    local=AnalysisOverrides(position_valuations=changes))
+        canonical = snapshot.to_json()
+        original_id = snapshot.content_id
+        changes.reverse()
+        equivalent = resolve_analysis(self.request, **self.context,
+                                      local=AnalysisOverrides(position_valuations=changes))
+        self.assertEqual(equivalent.content_id, original_id)
+        changes.clear()
+        valuations = snapshot.opening_valuations()
+        valuations.clear()
+        with self.assertRaises(FrozenInstanceError):
+            snapshot.position_valuations[0].valuation.amount = D(10)
+        self.assertEqual(snapshot.to_json(), canonical)
+        restored = ResolvedAnalysis.from_json(canonical)
+        self.assertEqual(restored.content_id, original_id)
+        self.assertEqual(restored, snapshot)
+        self.assertEqual(restored.opening_valuations(), snapshot.opening_valuations())
+        self.assertNotEqual(resolve_analysis(self.request, **self.context).content_id, original_id)
+        payload = json.loads(canonical)
+        origin = next(item for item in payload["origins"] if item["field"] == "opening.positions.cash.valuation")
+        origin["source"]["kind"] = SourceKind.PRESET.value
+        with self.assertRaisesRegex(ValueError, "require local or matching scenario provenance"):
+            ResolvedAnalysis.from_json(json.dumps(payload))
+
+
 class SnapshotTests(unittest.TestCase):
+    def test_unrelated_profile_update_changes_context_id_without_changing_opening_values(self):
+        profile, plan = household_example()
+        request = projection_request()
+        context = dict(plan=plan, preset=illustrative_preset())
+        original = resolve_analysis(request, profile=profile, **context)
+        changed = replace(profile, accounts=[
+            replace(account, valuation=Valuation("USD", D("4000"), START))
+            if account.id == "blair-cash" else account for account in profile.accounts
+        ])
+        revised = resolve_analysis(request, profile=changed, **context)
+        self.assertEqual(revised.opening_valuations(), original.opening_valuations())
+        self.assertNotEqual(revised.content_id, original.content_id)
+
     def test_source_mutation_revisions_and_snapshot_immutability(self):
         profile, plan = individual_example()
         preset = illustrative_preset()
@@ -284,7 +435,10 @@ class SnapshotTests(unittest.TestCase):
             AnalysisType.LOAN_PAYMENT, LoanPaymentInputs(usd(1200), D(0), 12),
         ))
         payload = json.loads(snapshot.to_json())
-        for changes in ({"schema_version": 2}, {"schema_version": True}, {"extra": "unknown"}, {"origins": []}):
+        for changes in (
+            {"schema_version": 1}, {"schema_version": 3}, {"schema_version": True},
+            {"extra": "unknown"}, {"origins": []},
+        ):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 ResolvedAnalysis.from_json(json.dumps({**payload, **changes}))
         with self.assertRaisesRegex(ValueError, "duplicate snapshot key"):

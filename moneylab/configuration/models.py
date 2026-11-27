@@ -10,6 +10,7 @@ from moneylab.domain.profile import Subject
 from moneylab.domain.values import (
     Money,
     Revision,
+    Valuation,
     calendar_date,
     decimal_value,
     distinct_records,
@@ -85,10 +86,22 @@ class ActivityAmountOverride:
 
 
 @dataclass(frozen=True, slots=True)
+class PositionValuationOverride:
+    position_id: str
+    valuation: Valuation
+
+    def __post_init__(self):
+        identifier(self.position_id)
+        if not isinstance(self.valuation, Valuation) or self.valuation.amount is None:
+            raise ValueError("a position override requires an explicit dated amount")
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisOverrides:
     assumptions: EconomicAssumptions = EconomicAssumptions()
     preferences: ModelPreferences = ModelPreferences()
     activity_amounts: tuple[ActivityAmountOverride, ...] = ()
+    position_valuations: tuple[PositionValuationOverride, ...] = ()
 
     def __post_init__(self):
         _validate_sections(self.assumptions, self.preferences)
@@ -96,6 +109,10 @@ class AnalysisOverrides:
             self.activity_amounts, ActivityAmountOverride, key=lambda entry: entry.activity_id,
         )
         object.__setattr__(self, "activity_amounts", amounts)
+        valuations = distinct_records(
+            self.position_valuations, PositionValuationOverride, key=lambda entry: entry.position_id,
+        )
+        object.__setattr__(self, "position_valuations", valuations)
 
 
 @dataclass(frozen=True, slots=True)

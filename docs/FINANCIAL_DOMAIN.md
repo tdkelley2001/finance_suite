@@ -93,6 +93,20 @@ or expense from its effective date within the activity period. Each activity
 allows one change per date. An override changes the base recurring amount.
 The saved scheduled change becomes applicable on its date.
 
+### Analysis scope and attribution
+
+Subject selection determines which records are relevant. A structurally valid
+profile and a resolved snapshot can still leave an ambiguous projection. M03
+must define and validate how selected positions and flows are attributed.
+
+| Case | M02 representation and M03 decision |
+| --- | --- |
+| Joint position in an individual analysis | The position participates once and carries its full valuation and legal ownership. M03 must determine how much of it to attribute to the person and how payments, contributions, and withdrawals affect that share. |
+| Household activity routed through individually or jointly owned positions | The plan can route household activity through positions with at least one owner or obligor in the household. Household analysis selects household and member activities. Individual analysis selects only activity assigned to that individual, even when household activity uses the same account. M03 must decide how to account for that activity when it affects an individual's position. |
+| Position shared with someone outside the household | The position participates once if a household member is an owner or obligor. M03 must decide how to represent value and cash flows attributable to outside parties. |
+| Unknown shares | A subject who covers every owner covers the whole legal position. The share of a subject covering only some owners remains unknown when shares were omitted. M03 must require appropriate attribution inputs where this affects the calculation. |
+| Transfer across an individual's analysis boundary | A household-assigned transfer from Alex's account to Blair's account is internal to their household. Alex's individual activity selection currently omits it even though it affects Alex's account. M03 must decide which transfers to include and how to reconcile both sides without double counting. |
+
 ## Configuration and analysis readiness
 
 Resolution accepts specific typed inputs. Economic assumption fields are
@@ -103,7 +117,8 @@ projection horizon in months and whether results use real dollars.
 | --- | --- |
 | Economic assumptions and model preferences | Local analysis override → saved scenario override → selected preset → explicitly supplied research defaults |
 | In-scope recurring amount | Local analysis override → saved scenario override → baseline plan |
-| Profile facts, ownership, plan routes, dates, and scheduled changes | Baseline records supplied by the caller |
+| In-scope opening account valuation, asset valuation, or liability balance | Local analysis override → saved scenario override → baseline valuation |
+| Ownership, position inventory, plan routes, activity dates, and scheduled changes | Baseline records supplied by the caller |
 
 Configuration field `None` is equivalent to omission and falls through.
 An activity amount must be explicit money. Zero and false take precedence
@@ -120,6 +135,25 @@ their actual revisions. When a plan or preset ID is absent from the scenario,
 the caller may still supply one. No loader runs during resolution. All such
 inputs remain independent and changes are expressed through replacement records.
 
+### Hypothetical opening valuations
+
+`PositionValuationOverride` references an existing position ID. It supplies a
+known nonnegative amount and a calendar date on or before the projection start.
+It must use the position's currency and pass the same Decimal validation as an
+actual valuation. Zero is accepted. A hypothetical value can supply an opening
+amount when the baseline value is unknown. Scope is determined by
+`positions_for(subject)`; the override describes the full position value before
+any attribution. Every supplied override is checked, including a saved override
+shadowed by a local value. Within a layer, each position can be overridden once.
+Only saved scenarios and local analysis overrides can supply these values.
+
+For value-based account holdings, the hypothetical valuation must keep the
+original valuation date and cover the disclosed holding values. A higher or
+lower total on that date changes the unclassified remainder. Holdings retain
+their recorded amounts. For weight-based holdings, the recorded weights are
+available for the hypothetical total with the undisclosed weight still
+unclassified. Neither policy adds holdings or changes the authoritative profile.
+
 Structural validation covers field types, amounts, ownership and cross-record
 references. Partial profiles can still have missing optional information.
 Empty collections enumerate supplied records and carry no assertion of catalog
@@ -127,7 +161,7 @@ completeness. Required missing projection inputs raise `MissingAnalysisInput`.
 Standalone loan input requires only principal, rate, and a term in months.
 It rejects scenario and profile context. The initial monthly projection
 contract requires a valid subject, a first-of-month start date, a horizon,
-and known valuations dated on or before the start for participating positions.
+and known effective valuations dated on or before the start for participating positions.
 An explicit real-dollar preference also requires inflation. Optional assumptions
 stay unset if unavailable. This validates the input contract only. M03 still
 needs model-specific checks for missing return assumptions, opening valuation
@@ -136,27 +170,43 @@ alignment, legal-share attribution, and debt payment treatment.
 ## Snapshot lifecycle and reproducibility
 
 `resolve_analysis()` returns a frozen `ResolvedAnalysis`. The snapshot
-captures the requested analysis type and inputs, the supplied profile, the
-effective plan, assumptions and preferences, and revisions of the profile,
+captures the requested analysis type and inputs, the supplied authoritative
+profile, the selected hypothetical position valuations, the effective plan,
+assumptions and preferences, and revisions of the profile,
 plan, scenario, preset, and defaults where applicable. Projection snapshots
 keep the full supplied baseline as reference context. Engines select their
-scope using the recorded subject. Activity-amount provenance identifies which
-layer supplied the effective value. Assumptions and preferences also identify
+scope using the recorded subject. Use `snapshot.opening_valuations()` to get
+the scoped effective values by position ID. `snapshot.profile` keeps actual
+facts, and `snapshot.position_valuations` keeps the winning overrides with
+their sources in `origins` at `opening.positions.<id>.valuation`.
+Activity amounts, assumptions, and preferences also identify
 their source. Facts, goals and events keep their provenance on their records.
 Methods and external data revisions, seed, and path count are captured when
 the caller supplies them. No projection method or dataset revision is bundled.
 
 Snapshots use frozen records and privately captured tuples on construction.
 Replacing a source profile, plan or preset produces new input records and
-does not change previous snapshots. The schema-versioned JSON contract
+does not change previous snapshots. The M02 review refinement uses snapshot
+schema version 2 for the explicit position overlay. The earlier schema was
+unreleased, so the reader supports version 2 only. The JSON contract
 round-trips through the same validation and rejects unknown fields, duplicate
 JSON keys, and unsupported versions. Canonical JSON sorts object keys and
 uses compact separators, ISO dates, Decimal strings with insignificant trailing
 zeros removed, and stable ID order for unordered record collections. The
-content ID is SHA-256 over that JSON encoded as UTF-8. Equivalent snapshots
-have the same recorded values and metadata, including revision IDs, provenance,
-scope, and seed. Input order and equivalent decimal spelling do not change
-the ID. A revision change can change the ID even when model values are equal.
+content ID is SHA-256 over that JSON encoded as UTF-8. It identifies the complete
+recorded execution context, including revision IDs, provenance, scope, and seed.
+Input order and equivalent decimal spelling do not change the ID. A change to
+an unrelated account or to an out-of-scope plan activity can change the ID
+even when the selected analysis uses identical inputs. Future caching based on
+calculation equivalence requires an explicit definition of each engine's
+dependencies.
+
+The internal snapshot retains the full supplied profile and effective plan.
+Selection of an individual subject does not confer access to the other people
+or records in that context. Future storage and retrieval must apply access
+controls to the full snapshot. Exports should produce a purpose-specific view
+with only the necessary, authorized records. Raw snapshot JSON is intended
+for internal input reproduction.
 
 This provides input reproducibility. Rerunning a historical calculation also
 requires its actual implementation, compatible runtime, and external dataset
