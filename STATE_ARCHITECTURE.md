@@ -14,6 +14,9 @@ models for compatibility with existing application imports and persisted
 records. `suite/calculations.py` is likewise a compatibility module; new engine
 code should import from `moneylab.engine`.
 
+The extracted models describe the legacy application state used in M01. Define
+future canonical MoneyLab models from approved product and domain requirements.
+
 Authentication and persistence remain isolated in `suite/auth.py`,
 `suite/profile_storage.py`, and `suite/supabase_client.py`.
 

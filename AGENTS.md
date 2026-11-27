@@ -3,6 +3,13 @@
 ## Project intent
 MoneyLab is a financial research and decision-support platform. Calculations must remain transparent, reproducible, and clearly distinguished from financial advice.
 
+## Architecture decisions
+Design new components from approved product, architecture, design, and financial
+methodology requirements. Evaluate legacy code against those requirements and
+reuse it where it is correct, maintainable, and naturally aligned. Document
+significant decisions to reuse, replace, or retire components. The legacy
+Streamlit app may serve as a temporary reference and development safeguard.
+
 ## Current repository
 - Existing application entry point: `app.py` (Streamlit).
 - Shared state and helpers: `suite/`.
