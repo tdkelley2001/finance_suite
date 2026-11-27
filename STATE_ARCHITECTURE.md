@@ -1,5 +1,25 @@
 # Shared State Architecture
 
+## Runtime boundaries
+
+Reusable financial code lives under `moneylab/engine/`. Its domain models and
+calculation functions accept explicit inputs and do not import Streamlit,
+Supabase, authentication, session state, or network clients. Tool-specific
+financial engines may depend on that package but retain the same
+framework-independent property.
+
+`suite/state.py` is the Streamlit session-state adapter and owns serialization,
+widget hydration, provenance updates, and orchestration. It re-exports domain
+models for compatibility with existing application imports and persisted
+records. `suite/calculations.py` is likewise a compatibility module; new engine
+code should import from `moneylab.engine`.
+
+The extracted models describe the legacy application state used in M01. Define
+future canonical MoneyLab models from approved product and domain requirements.
+
+Authentication and persistence remain isolated in `suite/auth.py`,
+`suite/profile_storage.py`, and `suite/supabase_client.py`.
+
 Money Lab state is split into four top-level buckets.
 
 ## 1. Profile
@@ -87,3 +107,14 @@ This lets the UI explain where a value came from, for example:
 The suite should prefer explicit ownership over implicit overwrites. If a tool is
 not the owner for a profile area, it should either read the value, write a
 scenario-specific input, or produce a tool output.
+
+## Current limitations
+
+- This boundary is a foundation, not a comprehensive household or monthly
+  projection engine.
+- Tool-specific dataclasses remain beside their engines until a concrete
+  cross-tool use case warrants moving them.
+- Serialization stays in the Streamlit adapter to preserve the stored JSON
+  shape. Schema versioning and migrations are deferred.
+- Existing methodology and timing conventions are unchanged. Characterization
+  tests preserve rent-versus-buy outputs but do not validate every assumption.
