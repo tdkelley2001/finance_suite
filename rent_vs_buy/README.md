@@ -176,6 +176,55 @@ This model intentionally simplifies reality in order to make tradeoffs explicit 
 - Outputs should be interpreted **comparatively**, not as absolute truth.
 - The model is best used to understand **sensitivity, tradeoffs, and risk distributions**, not to produce a single “correct” decision.
 
+### Known calculation defects
+
+1. **Year-end owner equity uses the opening home value.** Each row records
+   the appreciated home value and ending mortgage balance, but computes
+   owner net worth before applying that year's appreciation. In the case below,
+   year-end equity is $110,000.00 less $79,017.59, or $30,982.41. The row and
+   no-sale summary report $20,982.41. The $10,000 gap is the year's appreciation.
+   The sale summary uses the ending home value, so it avoids this timing error.
+2. **The economic waterfall double counts mortgage interest and fails to
+   reconcile.** Mortgage interest is a separate negative bar and is also
+   included in owner carrying costs. With sale enabled below, both bars deduct
+   $4,773.28. Starting from renter net worth and applying all intermediate bars
+   gives $27,191.54, which is $3,790.87 below the $30,982.41 owner endpoint.
+   In this simplified case the renter already invests the full mortgage outflow
+   ($982.41 of principal and $4,773.28 of interest). The owner gains the same
+   principal through equity, so principal cancels in the owner-minus-renter
+   comparison. The difference is $10,000.00 of appreciation less $4,773.28 of
+   interest. Removing the duplicate interest bar alone would still leave a
+   $982.41 gap from the principal bar.
+
+Run this synthetic example from the repository root. The case isolates
+appreciation and mortgage payments by setting other costs and investment
+returns to zero.
+
+```python
+from rent_vs_buy.samplers.deterministic import deterministic_run
+
+overrides = dict(
+    home_price=100_000, down_payment_pct=0.20, mortgage_rate=0.06,
+    mortgage_term=30, home_appreciation_rate=0.10, monthly_rent=0,
+    closing_costs_pct=0, selling_costs_pct=0, property_tax_pct=0,
+    maintenance_pct=0, hoa_monthly=0, homeowners_insurance_annual=0,
+    pmi_rate=0, renters_insurance_annual=0, investment_return=0,
+    investment_tax_drag=0, inflation=0,
+)
+no_sale = deterministic_run("Baseline", "US", overrides=overrides, horizon=1,
+                            sell_at_end=False)
+row = no_sale.yearly.iloc[-1]
+print(row.home_value - row.mortgage_balance, no_sale.summary["owner_net_worth"])
+
+sale = deterministic_run("Baseline", "US", overrides=overrides, horizon=1,
+                         sell_at_end=True)
+print(sale.waterfall)
+bars = sale.waterfall["value"]
+print(bars.iloc[:-1].sum(), bars.iloc[-1])
+```
+
+Both defects predate M01. Corrections require separate methodology review.
+
 ---
 
 ## Key Concepts

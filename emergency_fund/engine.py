@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from net_worth.engine import effective_tax_treatment
-from suite.state import FinancialAccount
+from moneylab.engine.models import FinancialAccount
 
 
 CASH_ACCOUNT_TYPES = {"Cash", "Checking", "Savings", "Money Market"}

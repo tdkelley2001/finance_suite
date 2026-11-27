@@ -1,0 +1,148 @@
+{
+  "updated_at": "2026-10-01T10:00:00+00:00",
+  "profile": {
+    "monthly_cash_flow": {
+      "net_monthly_income": 7500.0,
+      "required_monthly_expenses": 3500.0,
+      "discretionary_monthly_expenses": 1000.0,
+      "planned_monthly_savings": 1500.0,
+      "savings_rate": 0.2,
+      "emergency_expense_baseline": 3500.0,
+      "min_monthly_buffer": 750.0,
+      "source": "budget",
+      "provenance": {
+        "net_monthly_income": {
+          "source_type": "tool",
+          "source_id": "budget",
+          "label": "Net monthly income",
+          "updated_at": "2026-10-01T09:00:00+00:00"
+        }
+      }
+    },
+    "accounts": [
+      {
+        "name": "Example checking",
+        "account_type": "Checking",
+        "balance": 4000.0,
+        "tax_treatment": "Cash",
+        "provenance": {}
+      },
+      {
+        "name": "Example Roth IRA",
+        "account_type": "Roth IRA",
+        "balance": 8000.0,
+        "tax_treatment": "Roth",
+        "provenance": {}
+      }
+    ],
+    "balance_sheet": {
+      "total_assets": 24000.0,
+      "total_liabilities": 6000.0,
+      "net_worth": 18000.0,
+      "liquid_assets": 4000.0,
+      "retirement_assets": 8000.0,
+      "taxable_assets": 0.0,
+      "provenance": {}
+    },
+    "assets": [
+      {
+        "name": "Example car",
+        "asset_type": "Vehicle",
+        "value": 12000.0,
+        "provenance": {}
+      }
+    ],
+    "liabilities": [
+      {
+        "name": "Example auto loan",
+        "liability_type": "Auto Loan",
+        "balance": 6000.0,
+        "payment": 300.0,
+        "interest_rate": 0.05,
+        "provenance": {}
+      }
+    ],
+    "goals": [
+      {
+        "name": "Example reserve target",
+        "goal_type": "emergency_fund",
+        "target_amount": 21000.0,
+        "target_date": "2027-06-01",
+        "priority": "high",
+        "provenance": {}
+      }
+    ]
+  },
+  "assumptions": {
+    "global_defaults": {
+      "inflation": 0.03,
+      "expected_portfolio_return": 0.07,
+      "expected_portfolio_volatility": 0.15,
+      "cash_return": 0.04,
+      "mortgage_rate": 0.065,
+      "property_tax_rate": 0.012,
+      "homeowners_insurance_annual": 1500.0,
+      "pmi_rate": 0.01,
+      "home_appreciation": 0.03,
+      "rent_growth": 0.03,
+      "default_tax_rate": 0.22,
+      "capital_gains_tax_rate": 0.15,
+      "default_withdrawal_rate": 0.04,
+      "planning_horizon_years": 30
+    },
+    "provenance": {
+      "inflation": {
+        "source_type": "manual",
+        "source_id": "assumptions",
+        "label": "Inflation",
+        "updated_at": "2026-10-01T09:05:00+00:00"
+      }
+    }
+  },
+  "scenarios": {
+    "active": "Higher inflation",
+    "items": {
+      "Current": {
+        "name": "Current",
+        "description": "",
+        "assumptions_overrides": {},
+        "tool_inputs": {},
+        "provenance": {}
+      },
+      "Higher inflation": {
+        "name": "Higher inflation",
+        "description": "Synthetic comparison case",
+        "assumptions_overrides": {"inflation": 0.05},
+        "tool_inputs": {
+          "budget": {
+            "expenses": [
+              {"Category": "Housing", "Subcategory": "Rent", "Monthly Amount": 2000.0, "Required": true}
+            ]
+          },
+          "housing_affordability": {"down_payment_pct": 20.0}
+        },
+        "provenance": {
+          "budget": {
+            "source_type": "tool",
+            "source_id": "budget",
+            "label": "Tool inputs",
+            "updated_at": "2026-10-01T09:15:00+00:00"
+          }
+        }
+      }
+    }
+  },
+  "tool_outputs": {
+    "outputs": {
+      "budget": {
+        "summary": {"buffer": 1500.0},
+        "provenance": {
+          "source_type": "tool",
+          "source_id": "budget",
+          "label": "Tool output",
+          "updated_at": "2026-10-01T09:30:00+00:00"
+        }
+      }
+    }
+  }
+}
