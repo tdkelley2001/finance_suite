@@ -1,4 +1,8 @@
-# Shared State Architecture
+# Legacy Streamlit state architecture
+
+This document describes the Streamlit reference application and its storage
+adapter. The [canonical financial domain and configuration](docs/FINANCIAL_DOMAIN.md)
+defines the contracts for new financial analysis.
 
 ## Runtime boundaries
 
@@ -14,8 +18,8 @@ models for compatibility with existing application imports and persisted
 records. `suite/calculations.py` is likewise a compatibility module; new engine
 code should import from `moneylab.engine`.
 
-The extracted models describe the legacy application state used in M01. Define
-future canonical MoneyLab models from approved product and domain requirements.
+The extracted M01 models describe the legacy application state. M02 defines
+the canonical models in `moneylab.domain` independently of that state.
 
 Authentication and persistence remain isolated in `suite/auth.py`,
 `suite/profile_storage.py`, and `suite/supabase_client.py`.

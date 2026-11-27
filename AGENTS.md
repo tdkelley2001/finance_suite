@@ -13,9 +13,11 @@ Streamlit app may serve as a temporary reference and development safeguard.
 ## Current repository
 - Existing application entry point: `app.py` (Streamlit).
 - Shared state and helpers: `suite/`.
+- Canonical analysis inputs: `moneylab/domain/` and `moneylab/configuration/`.
+  See `docs/FINANCIAL_DOMAIN.md` for the authoritative contracts.
 - Reusable, framework-independent financial code: `moneylab/engine/`.
 - Focused financial tools: `net_worth/`, `budget/`, `emergency_fund/`, `housing_affordability/`, and `rent_vs_buy/`.
-- `STATE_ARCHITECTURE.md` describes the current state, not a guarantee of the future architecture.
+- `STATE_ARCHITECTURE.md` describes the legacy Streamlit state adapter.
 - The anticipated future stack is React/TypeScript + FastAPI + a Streamlit-independent Python financial engine. **Do not begin that migration unless it is explicitly in scope.**
 
 ## Working agreement

@@ -7,10 +7,10 @@ The existing application is Streamlit-based. The React/FastAPI architecture is a
 
 ## Financial engine boundary
 
-Place reusable domain models and general calculations in `moneylab/engine/`.
-They must operate on explicit inputs without Streamlit session state,
-authentication, Supabase configuration, or network access. Tool-specific pure
-engines may remain in each tool package and import from this shared boundary.
+The [canonical financial domain and configuration](FINANCIAL_DOMAIN.md) lives
+in `moneylab/domain/` and `moneylab/configuration/`. Reusable calculation
+primitives live in `moneylab/engine/calculations.py`. They operate on explicit
+inputs and are independent of the application or external services.
 
 Keep application orchestration and session-state behavior in `suite/` or the
 tool's `app.py`. Existing imports from `suite.state` and `suite.calculations`
