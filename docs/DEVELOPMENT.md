@@ -5,6 +5,18 @@ GitHub is the source of truth. Use Codex Cloud from a browser or Codex in VS Cod
 
 The existing application is Streamlit-based. The React/FastAPI architecture is a planned migration, not part of the development-foundation milestone.
 
+## Financial engine boundary
+
+Place reusable domain models and general calculations in `moneylab/engine/`.
+They must operate on explicit inputs without Streamlit session state,
+authentication, Supabase configuration, or network access. Tool-specific pure
+engines may remain in each tool package and import from this shared boundary.
+
+Keep application orchestration and session-state behavior in `suite/` or the
+tool's `app.py`. Existing imports from `suite.state` and `suite.calculations`
+are compatibility paths. Preserve the serialized state shape unless a
+separately reviewed migration is supplied.
+
 ## Python setup
 Use Python 3.11, consistent with `.devcontainer/devcontainer.json`.
 
