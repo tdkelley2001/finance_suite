@@ -8,7 +8,8 @@ from moneylab.domain.planning import ActivityKind, RecurringActivity
 from moneylab.domain.profile import Account, Liability
 
 from .accounting import (
-    CALCULATION_CONTEXT, ONE, ZERO, money_round, monthly_effective_rate, observe, reconcile,
+    CALCULATION_CONTEXT, ONE, ZERO, ProjectionRangeError, advance_inflation_index, money_round,
+    monthly_effective_rate, observe, reconcile,
 )
 from .debt import quote_debt
 from .readiness import METHODOLOGY, month_boundary, prepare
@@ -49,7 +50,7 @@ def _accrue_growth(opening, kinds, monthly_rates):
     balances = dict(opening)
     effects = []
     for position_id, rate in monthly_rates.items():
-        gain = money_round(opening[position_id] * rate)
+        gain = money_round(opening[position_id] * rate, field=f"growth for {position_id}")
         if gain:
             balances[position_id] += gain
             kind = (EffectKind.ACCOUNT_RETURN if kinds[position_id] is PositionKind.ACCOUNT
@@ -175,9 +176,12 @@ def project_monthly(snapshot: ResolvedAnalysis) -> ProjectionResult:
         for offset in range(horizon):
             period = MonthPeriod(month_boundary(inputs.start_on, offset),
                                  month_boundary(inputs.start_on, offset + 1))
-            if inflation_factor is not None:
-                index *= inflation_factor
-            executed = _execute_month(prepared, period, balances, kinds, monthly_rates, index, real_dollars)
+            try:
+                if inflation_factor is not None:
+                    index = advance_inflation_index(index, inflation_factor)
+                executed = _execute_month(prepared, period, balances, kinds, monthly_rates, index, real_dollars)
+            except ProjectionRangeError as exc:
+                raise ProjectionRangeError(f"{period.start_on}: {exc}") from exc
             if isinstance(executed, Termination):
                 termination = executed
                 break

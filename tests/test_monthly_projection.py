@@ -14,7 +14,7 @@ import unittest
 from moneylab.configuration.models import (
     ActivityAmountOverride, AnalysisOverrides, AnalysisRequest, AnalysisType, EconomicAssumptions,
     LoanPaymentInputs, ModelPreferences, MonthlyProjectionInputs, PositionGrowth,
-    PositionValuationOverride, Scenario, StochasticExecution,
+    PositionValuationOverride, Preset, ResearchDefaults, Scenario, StochasticExecution,
 )
 from moneylab.configuration.resolve import resolve_analysis
 from moneylab.configuration.snapshot import ResolvedAnalysis
@@ -26,8 +26,8 @@ from moneylab.domain.profile import (
     Liability, LiabilityKind, Owner, Ownership, Person, RateKind, Subject, SubjectKind,
 )
 from moneylab.domain.values import Money, Revision, SourceKind, Valuation
-from moneylab.projection import METHODOLOGY, ProjectionReadinessError, project_monthly
-from moneylab.projection.accounting import ReconciliationError, reconcile
+from moneylab.projection import METHODOLOGY, ProjectionRangeError, ProjectionReadinessError, project_monthly
+from moneylab.projection.accounting import ReconciliationError, advance_inflation_index, reconcile
 from moneylab.projection.results import EffectKind, FinancialEffect, PositionKind, Posting, ProjectionStatus
 
 
@@ -77,7 +77,8 @@ def payment(amount, *, split=None, key="pay", start=JAN, end=None):
 
 
 def snapshot(records, *, months=1, subject=ALEX, activities=(), changes=(), rates=None, inflation=None,
-             real=False, scenario=None, valuations=(), start=JAN, methodology=None, stochastic=None):
+             real=False, scenario=None, valuations=(), start=JAN, methodology=None, stochastic=None,
+             preset=None, defaults=None):
     if rates is None:
         rates = {item.id: "0" for item in records.positions_for(subject) if not isinstance(item, Liability)}
     request = AnalysisRequest(
@@ -88,7 +89,7 @@ def snapshot(records, *, months=1, subject=ALEX, activities=(), changes=(), rate
         Revision("plan", "1"), records.revision.id, activities=activities, changes=changes,
     )
     return resolve_analysis(
-        request, profile=records, plan=plan, scenario=scenario,
+        request, profile=records, plan=plan, scenario=scenario, preset=preset, defaults=defaults,
         local=AnalysisOverrides(
             preferences=ModelPreferences(months, real),
             assumptions=EconomicAssumptions(annual_inflation=None if inflation is None else D(inflation)),
@@ -103,6 +104,27 @@ def amounts(observation):
 
 
 class ProjectionReferenceTests(unittest.TestCase):
+    def test_general_return_remains_contextual_and_is_not_reported_as_consumed(self):
+        records = profile(account("cash", 100), account("invest", 1000))
+        rates = {"cash": "0", "invest": "0.12"}
+        defaults = ResearchDefaults(Revision("research", "1"),
+                                    EconomicAssumptions(annual_investment_return=D(".03")))
+        preset = Preset(Revision("market", "1"), "Market",
+                        EconomicAssumptions(annual_inflation=D(".02"), annual_investment_return=D(".1")))
+        baseline = snapshot(records, months=12, rates=rates, inflation=".02", defaults=defaults)
+        contextual = snapshot(records, months=12, rates=rates, preset=preset, defaults=defaults)
+        baseline_result = project_monthly(baseline)
+        result = project_monthly(contextual)
+        self.assertEqual(baseline.assumptions.annual_investment_return, D(".03"))
+        self.assertEqual(contextual.assumptions.annual_investment_return, D(".1"))
+        self.assertNotEqual(result.input_content_id, baseline_result.input_content_id)
+        self.assertEqual(replace(result, input_content_id=baseline_result.input_content_id), baseline_result)
+        self.assertEqual(result.annual_inflation, D(".02"))
+        self.assertEqual(result.position_growth, (PositionGrowth("cash", D(0)), PositionGrowth("invest", D(".12"))))
+        self.assertNotIn("annual_investment_return", result.to_json())
+        with self.assertRaisesRegex(ProjectionReadinessError, "supply an effective annual growth rate"):
+            project_monthly(snapshot(records, rates={}, preset=preset))
+
     def test_static_financial_positions_and_explicit_opening(self):
         car = Asset("car", "Car", AssetKind.VEHICLE, SOLE, value(3000))
         inputs = snapshot(profile(account("cash", 1000), assets=[car], liabilities=[debt(500, 0)]), months=2)
@@ -447,3 +469,62 @@ class ProjectionBoundaryTests(unittest.TestCase):
         run = subprocess.run([sys.executable, "-I", "-S", "-c", script, str(root), str(root / "tests")],
                              capture_output=True, text=True, timeout=30)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+
+class ProjectionNumericalBoundaryTests(unittest.TestCase):
+    def test_large_effective_growth_succeeds_until_a_closing_balance_exceeds_the_limit(self):
+        # The monthly factor is 10 because 1 + the effective annual rate is 10^12.
+        records = profile(account("invest", "1e17"))
+        rates = {"invest": "999999999999"}
+        result = project_monthly(snapshot(records, months=12, rates=rates))
+        self.assertEqual(result.status, ProjectionStatus.COMPLETED)
+        self.assertEqual(amounts(result.months[-1].closing)["invest"], D("1e29"))
+        with self.assertRaisesRegex(ProjectionRangeError, "2031-01-01: balance for invest"):
+            project_monthly(snapshot(records, months=13, rates=rates))
+
+    def test_growth_and_inflation_near_negative_one_remain_finite_over_360_months(self):
+        inputs = snapshot(profile(account("invest", "1e17")), months=360,
+                          rates={"invest": "-0.99999999"}, inflation="-0.99999999")
+        result = project_monthly(inputs)
+        self.assertEqual(result.completed_months, 360)
+        self.assertAlmostEqual(result.months[11].closing.net_worth, D("1e9"), delta=D("0.0000001"))
+        self.assertEqual(result.months[-1].closing.net_worth, 0)
+        self.assertTrue(all(
+            month.closing.inflation_index.is_finite() and month.closing.inflation_index > 0
+            and month.closing.net_worth.is_finite() and month.closing.net_worth >= 0
+            for month in result.months
+        ))
+        self.assertAlmostEqual(result.months[-1].closing.inflation_index / D("1e-240"), D(1),
+                               delta=D("1e-24"))
+
+    def test_extreme_deflation_limits_real_reporting_separately_from_nominal(self):
+        records = profile(account("cash", "1e17"))
+        # 0.000001 annual retention gives 10^-12 after 24 months.
+        near = project_monthly(snapshot(records, months=24, inflation="-.999999", real=True))
+        self.assertEqual(near.months[-1].closing.real_net_worth, D("1e29"))
+        self.assertEqual(near.months[-1].closing.net_worth, D("1e17"))
+        with self.assertRaisesRegex(ProjectionRangeError, "2032-02-01: real net worth"):
+            project_monthly(snapshot(records, months=26, inflation="-.999999", real=True))
+        nominal = project_monthly(snapshot(records, months=26, inflation="-.999999"))
+        self.assertEqual(nominal.status, ProjectionStatus.COMPLETED)
+        self.assertEqual(nominal.months[-1].closing.net_worth, D("1e17"))
+
+    def test_large_debt_interest_and_overflow_are_distinct_from_funding_shortfalls(self):
+        # A nominal annual rate of 12 charges one opening principal in interest in one month.
+        records = profile(account("cash", "9e17"), liabilities=[debt("9e17", "12")])
+        result = project_monthly(snapshot(records, activities=[payment("9e17")]))
+        self.assertEqual(result.status, ProjectionStatus.COMPLETED)
+        self.assertEqual(amounts(result.months[0].closing), {"cash": 0, "loan": D("9e17")})
+        self.assertEqual([(item.kind, item.amount) for item in result.months[0].effects], [
+            (EffectKind.INTEREST_ACCRUED, D("9e17")), (EffectKind.INTEREST_PAID, D("9e17")),
+        ])
+        enormous = profile(account("cash", "9e17"), liabilities=[debt("9e17", "9e17")])
+        with self.assertRaisesRegex(ProjectionRangeError, "2030-01-01: debt interest for loan"):
+            project_monthly(snapshot(enormous, activities=[payment("9e17")]))
+
+    def test_index_nonfinite_zero_and_overflow_are_range_errors(self):
+        for index in (D("Infinity"), D(0)):
+            with self.subTest(index=index), self.assertRaisesRegex(ProjectionRangeError, "finite and positive"):
+                advance_inflation_index(index, D(1))
+        with localcontext(Emax=2), self.assertRaisesRegex(ProjectionRangeError, "inflation index overflowed"):
+            advance_inflation_index(D(900), D(10))

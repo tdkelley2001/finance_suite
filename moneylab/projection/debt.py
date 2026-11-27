@@ -24,7 +24,8 @@ def quote_debt(
     if not opening:
         return DebtQuote(ZERO)
 
-    interest = money_round(opening * liability.terms.annual_rate / 12)
+    interest = money_round(opening * liability.terms.annual_rate / 12,
+                           field=f"debt interest for {liability.id}")
     if activity is None and interest:
         return DebtQuote(opening, issue=ExecutionIssue(
             "missing_debt_payment", "supply an active payment covering accrued interest",

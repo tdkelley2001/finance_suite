@@ -119,6 +119,13 @@ class Termination:
 
 @dataclass(frozen=True, slots=True)
 class ProjectionResult:
+    """Financial results and the economic inputs M03 uses to produce them.
+
+    `position_growth` drives position returns. `annual_inflation`, when supplied,
+    drives the reporting index. The snapshot ID also identifies resolved context
+    such as a general investment return that M03 does not consume.
+    """
+
     input_content_id: str
     methodology: Revision
     currency: str

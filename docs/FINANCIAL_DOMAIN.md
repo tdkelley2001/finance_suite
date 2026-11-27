@@ -164,6 +164,15 @@ Scenario and local layers are validated independently. The resolved records
 and their origins at `assumptions.positions.<id>.growth` are part of the
 snapshot. No missing rate is filled by a global assumption, preset, or default.
 
+The resolved general `annual_investment_return` is contextual for M03. A
+resolved snapshot can describe assumptions that a particular methodology
+does not consume. M03 reports the explicit position rates and inflation
+input it uses. Later methodologies can combine centralized economic
+preset assumptions with explicit investment allocations to produce
+position-level returns under a versioned mapping. That mapping must
+identify its data and assumptions, handle incomplete allocations explicitly,
+and preserve the provenance of the effective rates it produces.
+
 ### Structural validation
 
 Structural validation covers field types, amounts, ownership and cross-record

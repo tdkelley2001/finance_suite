@@ -1,6 +1,6 @@
 """Deterministic rate conversion, postings and reconciliation."""
 
-from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
+from decimal import Context, Decimal, Overflow, ROUND_HALF_EVEN, localcontext
 
 from .results import (
     EffectKind, FinancialEffect, Observation, PositionBalance, PositionKind, Reconciliation,
@@ -22,17 +22,27 @@ class ReconciliationError(ArithmeticError):
     """Projected closing positions disagree with recorded financial effects."""
 
 
-def money_round(amount: Decimal) -> Decimal:
-    if not amount.is_finite() or abs(amount) >= AMOUNT_LIMIT:
-        raise ProjectionRangeError("projection amounts require fewer than 31 integer places")
+def money_round(amount: Decimal, *, field: str = "projection amount") -> Decimal:
+    if not amount.is_finite() or amount.copy_abs() >= AMOUNT_LIMIT:
+        raise ProjectionRangeError(f"{field} must be finite and below 10^30 in magnitude")
     rounded = amount.quantize(MONEY_QUANTUM)
-    if abs(rounded) >= AMOUNT_LIMIT:
-        raise ProjectionRangeError("rounded amount reached the projection amount limit")
+    if rounded.copy_abs() >= AMOUNT_LIMIT:
+        raise ProjectionRangeError(f"{field} rounds beyond the projection amount limit")
     return rounded
 
 
 def monthly_effective_rate(annual: Decimal) -> Decimal:
     return (ONE + annual) ** (ONE / 12) - ONE
+
+
+def advance_inflation_index(index: Decimal, monthly_factor: Decimal) -> Decimal:
+    try:
+        advanced = index * monthly_factor
+    except Overflow as exc:
+        raise ProjectionRangeError("inflation index overflowed") from exc
+    if not advanced.is_finite() or advanced <= ZERO:
+        raise ProjectionRangeError("inflation index must remain finite and positive")
+    return advanced
 
 
 def add_postings(opening: dict[str, Decimal], effects: tuple[FinancialEffect, ...]) -> dict[str, Decimal]:
@@ -76,8 +86,15 @@ def reconcile(opening, closing, kinds, effects) -> Reconciliation:
 
 def observe(as_of, balances, kinds, inflation_index, real_dollars) -> Observation:
     positions = tuple(
-        PositionBalance(key, kinds[key], money_round(amount)) for key, amount in balances.items()
+        PositionBalance(key, kinds[key], money_round(amount, field=f"balance for {key}"))
+        for key, amount in balances.items()
     )
-    nominal = money_round(net_worth(balances, kinds))
-    real = money_round(nominal / inflation_index) if real_dollars else None
+    nominal = money_round(net_worth(balances, kinds), field="nominal net worth")
+    real = None
+    if real_dollars:
+        try:
+            deflated = nominal / inflation_index
+        except Overflow as exc:
+            raise ProjectionRangeError("real net worth overflowed") from exc
+        real = money_round(deflated, field="real net worth")
     return Observation(as_of, positions, nominal, inflation_index, real)

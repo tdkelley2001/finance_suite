@@ -70,6 +70,12 @@ supplied rate under the same conversion. Positive and negative rates above
 −100% are supported. Month-end inflows begin earning in the following month.
 Account growth applies to the total. Holdings-level growth is deferred.
 
+The result's `position_growth` lists the effective annual rates used for
+position growth. Its optional `annual_inflation` records the rate used for
+the reporting index. A resolved general `annual_investment_return` remains
+context in the input snapshot and its content ID. It supplies no M03
+growth rate and is absent from the result's consumed inputs.
+
 When supplied, annual inflation is effective. The index starts at 1 and
 compounds monthly. Optional real net worth is nominal net worth divided by
 that index, in opening-date purchasing power. Inflation changes no nominal
@@ -101,14 +107,21 @@ refinancing, or delinquency treatment.
 
 Available funds are the source account's opening balance after growth plus
 credited external income. Incoming internal movements cannot fund same-month
-debits. Total requested debits are tested together per account, so activity
-IDs or input order do not assign priorities. A shortfall or servicing issue
+debits under this initial settlement rule. Total requested debits are tested
+together per account, so activity IDs or input order do not assign priorities.
+A shortfall or servicing issue
 leaves the entire attempted month unposted, including tentative growth,
 income, and interest. The result preserves the last reconciled observation
 and records the attempted period, planned amounts, and either servicing
 issues or grouped deficits. Deficits identify the account, available funds,
 required funds, and competing debits. Unpaid expenses remain unmet. The model
 creates no cash overdraft, receivable, liability, or automatic funding route.
+
+A stop can reflect the supplied funding policy or modeled routes even when
+the household has wealth elsewhere. Future retirement and integrated
+projections will need explicit policies that route eligible withdrawals and
+transfers into the accounts paying expenses in the same period. Those policies
+will need explicit ordering and reconciliation of each movement.
 
 | Applied effect | Position postings | Economic net-worth effect |
 | --- | --- | --- |
@@ -130,9 +143,35 @@ raise a reconciliation exception.
 Calculations use a 60-digit Decimal context. Monthly growth and interest
 round half to even at eight fractional places. Planned amounts fit that
 grid. Postings and nominal reconciliation use exact grid arithmetic with
-zero residual. The modeled magnitude limit is below 10^30. Real net worth
-is rounded for reporting. These conventions describe model precision.
-Monthly rounding can cause small differences from unrounded references.
+zero residual. Rounded monetary effects, reported balances, and nominal and
+real net worth must be finite and have magnitude below 10^30. This existing
+limit keeps modeled amounts on the eight-place grid and leaves headroom for
+exact posting arithmetic. It is a bound on calculated money. Growth and
+inflation inputs retain their canonical domain validation.
+
+The inflation index must stay finite and positive. Numerical boundary failures
+raise `ProjectionRangeError`, with the attempted month and affected value when
+applicable. This is an execution error distinct from a modeled funding stop.
+Reconciliation errors still surface independently. Real net worth is rounded
+for reporting. Monthly rounding can cause small differences from unrounded
+references.
+
+## Integration boundary for economic paths
+
+`project_monthly()` is the deterministic driver. It converts annual assumptions
+to monthly rates once, supplies the same realized growth rates each period, and
+advances the cumulative inflation index from one. The existing `_execute_month`
+boundary receives realized monthly growth rates keyed by position and the
+cumulative index at the closing boundary. It owns postings, fixed-rate debt,
+funding checks, atomic settlement, and reconciliation.
+
+M04 should validate period alignment and position coverage before passing
+period-specific realized rates and the closing index to that same month
+execution path. The path driver should own the monthly inflation factors,
+accumulate the index from the opening basis, and record the economic path's
+inputs and provenance. Historical and stochastic paths need their own
+generation or replay rules. The financial effects and settlement logic belong
+in the shared month executor.
 
 ## Independent validation
 
@@ -144,3 +183,6 @@ nominal accruing $60 in month one, and $1,200 nominal after one year of 2%
 inflation equaling $1,176.47058824 in opening dollars. The 360-month reference
 allows small monthly rounding drift. Another test introduces offsetting
 position errors that would pass an aggregate-only net-worth check.
+Boundary cases cover large growth and debt interest, 360 months near the
+negative annual rate limit, and real net worth crossing the reporting bound
+while nominal projections remain valid.
