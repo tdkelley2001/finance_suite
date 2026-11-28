@@ -125,9 +125,9 @@ variable paths independently. An opening balance of $1,000 exposed to +10% and
 the two orders close at $1,060 and $1,090. A shared series drives independent
 account balances without sharing their contributions or withdrawals.
 
-M04B should resolve explicit portfolios and allocations into effective
-position returns for each period and record the return mapping and its inputs.
-M04A supports direct series links and explicit constant treatments. Portfolio
-weights, holdings-level returns, allocation drift, rebalancing, historical
-dataset conventions, stochastic generation, and simulation summaries have
-their own future work packages.
+The [M04B1 investment domain](INVESTMENT_DOMAIN.md) validates investment
+inputs and resolves a single sleeve's direct, composite, or constant return.
+The M04A financial path driver still accepts direct and constant position
+exposures. M04B2 will use evolving sleeve values at the shared posting
+boundary. Historical dataset conventions, stochastic generation, and
+simulation summaries have their own future work packages.

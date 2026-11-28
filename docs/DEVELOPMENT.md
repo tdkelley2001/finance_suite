@@ -23,6 +23,10 @@ conventions and supported cases.
 `moneylab/projection/path_execution.py` maps series to positions and supplies
 economic inputs to the same monthly execution loop as M03.
 
+`moneylab/investment/` defines [investment inputs](INVESTMENT_DOMAIN.md),
+resolves opening sleeves and single-period returns, and derives portfolio
+group summaries. Settlement remains in the shared financial executor.
+
 Keep application orchestration and session-state behavior in `suite/` or the
 tool's `app.py`. Existing imports from `suite.state` and `suite.calculations`
 are compatibility paths. Preserve the serialized state shape unless a

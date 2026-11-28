@@ -19,6 +19,7 @@ Streamlit app may serve as a temporary reference and development safeguard.
 - Canonical monthly execution: `moneylab/projection/`. See
   `docs/DETERMINISTIC_MONTHLY_PROJECTION.md` for the versioned methodology.
 - Shared economic inputs: `moneylab/economics/`. See `docs/ECONOMIC_PATHS.md`.
+- Investment inputs and policy contracts: `moneylab/investment/`. See `docs/INVESTMENT_DOMAIN.md`.
 - Focused financial tools: `net_worth/`, `budget/`, `emergency_fund/`, `housing_affordability/`, and `rent_vs_buy/`.
 - `STATE_ARCHITECTURE.md` describes the legacy Streamlit state adapter.
 - The anticipated future stack is React/TypeScript + FastAPI + a Streamlit-independent Python financial engine. **Do not begin that migration unless it is explicitly in scope.**
