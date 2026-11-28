@@ -55,6 +55,10 @@ is available. An unreported remainder is unclassified. Cash is identified
 only by an explicit cash holding. Holdings have no separate balance-sheet
 value. Aggregate balances, net worth, and savings rates are derived outputs.
 
+The [investment domain](INVESTMENT_DOMAIN.md) links modeled sleeves to these
+reported holdings and to effective opening valuations. Investment allocations
+and policies are resolved separately and add no authoritative positions.
+
 ## Values and timing
 
 - Money and rates use finite `Decimal` values with at most 18 integer places
